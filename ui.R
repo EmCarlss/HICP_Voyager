@@ -5,7 +5,7 @@ library(dplyr)
 library(plotly)
 library(bslib)
 
-# Läs in eurostat_countries dataframe
+# Read eurostat_countries dataframe
 eu_areas <- data.frame(code = c("EU", "EA"), name = c("European union", "Euro area"), label = c("European union", "Euro area"))
 eurostat_countries <- rbind(eu_countries, efta_countries, eu_areas) %>% 
         select(code, name) %>% arrange(name) %>% 

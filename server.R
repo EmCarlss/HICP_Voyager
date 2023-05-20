@@ -38,17 +38,17 @@ function(input, output, session) {
                 data_no_na <- data %>%
                         filter(!is.na(values), substr(time, 1, 3) == "Jan")
                 
-                # Gruppera data efter "geo" och "coicop", och hitta det minsta året med observationer för varje grupp
+                # Group by "geo" & "coicop", find the first year with observations for every group
                 min_years <- data_no_na %>%
                         group_by(geo, coicop) %>%
                         summarise(min_year = min(time))
                 
-                # Hitta det första gemensamma året med observationer för alla länder och COICOP-grupper
+                # Find the first common year
                 first_non_na_year <- min_years %>%
                         summarise(first_common_year = max(min_year)) %>%
                         pull(max(first_common_year))
                 
-                # Hitta det sista gemensamma året med observationer för alla länder och COICOP-grupper
+                # Find the last common year
                 last_non_na_year <- max_years %>%
                         summarise(last_common_year = min(max_year)) %>%
                         pull(min(last_common_year))
@@ -57,7 +57,7 @@ function(input, output, session) {
                 return(data$time)
         })
         
-        # Uppdatera selectInput för att visa listan över valda år
+        # Update selectInput to show the list of available years
         observe({
                 updateSelectInput(session, "select_years", choices = as.character(unique(substr(selected_data(), start = 5, stop = 8))))
                 req(input$countries, input$coicops)
@@ -84,7 +84,7 @@ function(input, output, session) {
                 return(rebased_data)
         })
         
-        # Skapa en plot
+        # Create the plot
         observeEvent(input$rebase, {
                 output$plot <- renderPlotly({
                         req(plot_data)
@@ -92,10 +92,10 @@ function(input, output, session) {
                         
                         data <- data[data$geo %in% input$countries, ]
                         
-                        # Hitta det första året där variabeln "values" innehåller numeriska tal
+                        # Find the first year where values contains index numbers
                         first_non_na_year <- min(data$time[!is.na(data$values)])
                         
-                        # Filtrera bort rader före det första året där variabeln "values" innehåller numeriska tal
+                        # Remove rows prior to the first year where values contains numbers
                         data <- filter(data, time >= first_non_na_year)
                         data$time <- as.Date(as.yearmon(data$time), format="%Y %B")
                         
@@ -122,30 +122,26 @@ function(input, output, session) {
                                                         showarrow = FALSE,
                                                         font = list(
                                                                 color = "black",
-                                                                size = 10  # Ange den önskade fontstorleken här
+                                                                size = 10  
                                                         )
                                                 ))
                                         
                                 labled_input_coicop<-left_join(data.frame(input$coicops),coicop_set, by = c("input.coicops"="coicop_code"))
                                 
-                                # Hämta värden från input$coicops och separera dem med kommatecken
+                                # Retrieve values from input$coicops and separate them with commas
                               
                                 coicop_values <- paste(labled_input_coicop$code_label, collapse = ", ")
-                                #coicop_values <- paste(input$coicops, collapse = ", ")
                                 
-                                # Ersätt sista kommatecknet med ordet "and"
+                                # Replace final comma with "and"
                                 coicop_values <- gsub(",([^,]*)$", " and\\1", coicop_values)
                                 
-                                # Skapa rubriktexten med hjälp av textsträngen och värdena från input$coicops
+                                # Create the explanatory text
                                 plot_title <- paste("Price development for", coicop_values)
                                 
-                                # Skapa rubriktexten med hjälp av textsträngen och värdena från input$coicops med automatisk radbrytning
-                                plot_title <- paste("Price development for", coicop_values)
-                                
-                                # Lägg till radbrytning i rubriktexten för att uppnå word-wrapping
+                                # Add word-wrapping
                                 plot_title <- gsub("(.{1,70})(\\s+|$)", "\\1\n", plot_title)
                                 
-                                # Lägg till rubriken i mitten av plotten
+                                # Add the text in the plot
                                 plotly_plot <- plotly_plot %>% 
                                         layout(
                                                 paper_bgcolor = "white",
@@ -183,10 +179,10 @@ function(input, output, session) {
                      
                      data <- data[data$geo %in% input$countries, ]
                      
-                     # Hitta det första året där variabeln "values" innehåller numeriska tal
+                     # Find the first year where "values" contains numbers
                      first_non_na_year <- min(data$time[!is.na(data$values)])
                      
-                     # Filtrera bort rader före det första året där variabeln "values" innehåller numeriska tal
+                     # Remove rows with NAs
                      data <- filter(data, time >= first_non_na_year)
                      ddata<-data%>%select(coicop,geo,time,newbase)
                      data$time <- toString(as.Date(as.yearmon(ddata$time), format="%Y %B"))
