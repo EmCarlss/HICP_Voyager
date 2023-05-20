@@ -19,3 +19,6 @@ Note:
 It's possible to zoom in on a certain time period by just press down the left mouse button and drag the pointer over a certain area in the graph. It's also possible to save the re-referenced data to CSV using the Download data-button.
 
 In some cases a country may lack data for a subcomponent, if so no data will be shown in the graph.
+
+App available here:
+https://emcarlss.shinyapps.io/HICP_Voyager/
