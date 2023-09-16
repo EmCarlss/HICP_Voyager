@@ -1,5 +1,5 @@
-# Development-Of-Data_Products-W4
-The repo for the Coursera course "Development of Data Products, week 4
+# HICP Voyager
+
 
 Navigate seamlessly in the universe of european price statistics
 
