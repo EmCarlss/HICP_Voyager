@@ -1,4 +1,4 @@
-# HICP Voyager
+# HICP Voyager - Dashboard for the european HICP index
 
 
 Navigate seamlessly in the universe of european price statistics
