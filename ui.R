@@ -28,9 +28,13 @@ ui <- fluidPage(theme = bs_theme(bootswatch = "minty"),
       padding-top: 3px;
       padding-bottom: 3px;
     }
+    .plot-container .legend .traces .legendtext {
+    white-space: normal !important;
+    word-break: break-word !important;
+  }     
   ")),        
         tags$div(
-                tags$h1("HICP Voyager 1.0", style = "text-align: left; margin-bottom: 10px; margin-top: 10px;font-size: 20px;")
+                tags$h1("HICP Voyager 1.1", style = "text-align: left; margin-bottom: 10px; margin-top: 10px;font-size: 20px;")
         ),
         navbarPage(
                 title = "",
@@ -55,6 +59,27 @@ ui <- fluidPage(theme = bs_theme(bootswatch = "minty"),
                                  ),
                                  column(width = 8,
                                         plotlyOutput("plot")
+                                 )
+                         )
+                ),
+                tabPanel("Weights",
+                         fluidRow(
+                                 column(width = 4,
+                                        selectInput("countries_w", "Select countries:", choices = setNames(eurostat_countries$code, eurostat_countries$name), multiple = TRUE),
+                                        selectInput("coicop_w", "Select product categories:", choices = setNames(label_set$coicop_code, label_set$code_label), multiple = FALSE),
+                                        actionButton("update_w", "Retrieve data"), 
+                                        br(),
+                                        p(" "),
+                                        br(),
+                                        p(" "),
+                                        br(),
+                                        conditionalPanel(
+                                                condition = "output.plot_w",
+                                                downloadLink('downloadData_w', 'Download data')
+                                        )
+                                 ),
+                                 column(width = 8,
+                                        plotlyOutput("plot_w")
                                  )
                          )
                 ),

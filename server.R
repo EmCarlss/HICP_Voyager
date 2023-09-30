@@ -14,12 +14,58 @@ function(input, output, session) {
                 clean_eurostat_cache()
                 data$time <- as.yearmon(data$time)
                 new_plot_data<<-TRUE
-                print(paste("hikp_data new_plot_data: ", new_plot_data))
+    
                 return(data)
+                
         })
         
+        #Weights data
+        hikp_w_data <- eventReactive(input$update_w, {
+                
+                req(input$countries_w, input$coicop_w)
+                filtered_data <- coicop_set_hierarchy[coicop_set_hierarchy$parent_code == input$coicop_w, ]
+                
+                result <- unique(filtered_data$coicop_code)
+                
+                result <- result[!is.na(result)]
+                
+                if (length(result) == 0) {
+                        result <- input$coicop_w
+                }
+                
+                data <- get_eurostat("prc_hicp_inw", filters = list(geo = input$countries_w,
+                                                                    #time = c(years),
+                                                                    coicop =result),update_cache = TRUE)
+                
+                
+                data_no_na <- data %>%
+                        filter(!is.na(values))
+                
+                
+                # Group by "geo" & "coicop", find the first year with observations for every group
+                min_years <- data_no_na %>%
+                        group_by(geo, coicop) %>%
+                        summarise(min_year = min(time))
+                
+                # Find the first common year
+                first_non_na_year <- min_years %>%
+                        summarise(first_common_year = max(min_year)) %>%
+                        pull(max(first_common_year))
+                
+                
+                data <- filter(data, time >= max(first_non_na_year))
+
+                
+                
+                label_set<-select(coicop_set_hierarchy, coicop_code, code_label)
+                
+                # Merged datasets based on ID-column
+                merged_data <- merge(data, label_set, by.x = "coicop", by.y = "coicop_code", all.x = TRUE)
+                
+                return(merged_data)
+        })
         
-        # Function to create a list of selected years
+        # Function to create a list of selected years for index
         selected_data <- reactive({
                 req(hikp_data())
                 data <- hikp_data()
@@ -57,12 +103,13 @@ function(input, output, session) {
                 return(data$time)
         })
         
-        # Update selectInput to show the list of available years
+        # Update selectInput to show the list of available years (index)
         observe({
                 updateSelectInput(session, "select_years", choices = as.character(unique(substr(selected_data(), start = 5, stop = 8))))
                 req(input$countries, input$coicops)
         })
-
+        
+        #Create index data for plot
         plot_data <- eventReactive(input$rebase,{
                 req(hikp_data())
                 data<-hikp_data()
@@ -84,7 +131,77 @@ function(input, output, session) {
                 return(rebased_data)
         })
         
-        # Create the plot
+        # Create the plot (weights)
+        observeEvent(input$update_w, {
+                output$plot_w <- renderPlotly({
+                        req(hikp_w_data())
+                        data <- hikp_w_data()
+                        
+                        
+                        if(is.null(input$coicop_w)==FALSE){
+                                plotly_plot <- plot_ly(data, x = ~time, y = ~newbase, color = ~geo, linetype = ~coicop, type = 'scatter', mode = 'lines')
+                                
+                                #Create list to store subplots
+                                subplots <- list()
+                                
+                                # Loopa igenom varje unikt värde i "geo"
+                                count<-0
+                                
+                                for (geo_value in unique(data$geo)) {
+                                        
+                                        # Filter dataset for the current geo value
+                                        count<-count+1
+                                        filtered_data <- data[data$geo == geo_value, ]
+                                        filtered_data$values <- ifelse(is.na(filtered_data$values), 0, filtered_data$values)
+                                        # Create a stacked bar chart for current country
+                                        
+                                        if(count==1){subpl <- plot_ly(filtered_data, x = ~time, y = ~values,color=~code_label, type = "bar", legendgroup=~code_label)}
+                                        if(count>1){subpl <- plot_ly(filtered_data, x = ~time, y = ~values,color=~code_label, type = "bar", legendgroup=~code_label, showlegend=F)}
+                                        
+                                        subpl <- subpl %>% layout(barmode = 'stack',annotations=list(text=geo_value,xref="paper",yref="paper",yanchor="bottom",xanchor="center",align="center",x=0.5,y=0.95,showarrow=FALSE))
+                                        
+                                        # Add axis labels
+                                        subpl <- subpl %>% layout(xaxis = list(title = ""), yaxis = list(title = "Weight, per mille"))
+                                        
+                                        # Add the subplot in the list
+                                        subplots[[geo_value]] <- subpl
+                                }
+                                
+                                plot_rows=1
+                                
+                                if(length(subplots)>2){
+                                
+                                plot_rows=length(subplots)-1}
+                                
+                                if((length(subplots) %% 2) == 0) {
+                                        #Even number of subplots
+                                        plot_rows=length(subplots)/2
+                                } else {
+                                        #Odd number of subplots
+                                        plot_rows=(length(subplots)+1)/2
+                                }
+                                
+                                
+                                # 
+                                # Create layout for the frame graph, size depending on number of selected countries
+                                layout <- plotly::subplot(subplots, nrows = plot_rows, titleX=TRUE, shareX=TRUE,titleY=TRUE,shareY=TRUE)
+                                layout <- layout %>% layout(height = plot_rows*250,width=1000)
+                                
+                                # Create the frame graph
+                                plotly_plot_w <- plotly_build(layout)
+                                
+                                # Add the class "plot-container" to the labels box
+                                plotly_plot_w$x$attrs$legend$x$class <- "plot-container"
+                                
+                                
+                                return(plotly_plot_w)
+                                
+                        }
+                })
+                
+        })
+        
+        # Create the index plot
         observeEvent(input$rebase, {
                 output$plot <- renderPlotly({
                         req(plot_data)
@@ -112,7 +229,7 @@ function(input, output, session) {
                                                 xaxis = list(
                                                         title = ""
                                                 ), 
-                                                legend = list(font = list(color = "black"),x = 1.1, y = 1.0),
+                                                legend = list(font = list(color = "black")),
                                                 annotations = list(
                                                         x = 1,
                                                         y = 0,
@@ -168,8 +285,8 @@ function(input, output, session) {
                 
         })
         
-        
-        
+            
+        #Download index data
         output$downloadData <- downloadHandler(
                    filename = function() {
                      paste('data-', Sys.Date(), '.csv', sep='')
@@ -189,6 +306,21 @@ function(input, output, session) {
                 
                      write.csv(ddata, con)
                    })
+        
+        #Download weights data
+        output$downloadData_w <- downloadHandler(
+                filename = function() {
+                        paste('data-', Sys.Date(), '.csv', sep='')
+                },
+                content = function(con_w) {
+                        data <- hikp_w_data()
+                        
+                        data$time <- substr(data$time, 1, 4)
+                        
+                        ddata<-data%>%select(code_label,geo,time,values)
+                        
+                        write.csv(ddata, con_w)
+                })
 
 }
 
