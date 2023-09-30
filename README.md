@@ -5,6 +5,8 @@ Navigate seamlessly in the universe of european price statistics
 
 This app enables to easily produce a graph for the all-items level or any subcomponent(s) in the european HICP (Harmonized Index of Consumer Prices). Users can also choose countries and set a new reference period, common for all selected index series. 
 
+Version 1.1: Added functionality to also compare the item weights between countries.
+
 How to use:
 
 1. Select countries from the list.
