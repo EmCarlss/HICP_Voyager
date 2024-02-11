@@ -132,12 +132,13 @@ function(input, output, session) {
                 if (input$contribution_type == "selected higher aggregate") {
                         data_W_jTOT$WT_j<-data_W_jTOT$WT_j_pre/data_W_TOT$WT_TOT*1000
                 } else if (input$contribution_type == "all-items HICP") {
-                        data_W_jTOT$WT_j<-data_W_jTOT$WT_TOT
+                        data_W_jTOT$WT_j<-data_W_jTOT$WT_j_pre
                 }
                 
                 
                 
                 data_W_jTOT<-select(data_W_jTOT,-WT_j_pre,-WT_TOT)
+                print(data_W_jTOT)
                 
                 result_j <- left_join(data_I_j, data_W_jTOT, by = c("year", "coicop", "geo"))
                 
