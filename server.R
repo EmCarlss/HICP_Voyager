@@ -86,11 +86,27 @@ function(input, output, session) {
                 result <- unique(filtered_data$coicop_code)
                 
                 result <- result[!is.na(result)]
-                full_coicop <- c(result, input$coicop_ar)
+                
+                if (input$contribution_type=="selected higher aggregate"){
+                        full_coicop <- c(result, input$coicop_ar)
+                }
+
+                if (input$contribution_type=="all-items HICP" && input$coicop_ar !="CP00"){
+                        full_coicop <- c(result, input$coicop_ar,"CP00")
+       
+                }
+                
+                if (input$contribution_type=="all-items HICP" && input$coicop_ar == "CP00"){
+                        full_coicop <- c(result, input$coicop_ar)
+       
+                }
+                
                 
                 if (length(result) == 0) {
-                        result <- input$coicop_ar
-                        full_coicop<-result
+                        
+                                result <- input$coicop_ar
+                                full_coicop<-result
+
                 }
                 
                 
@@ -142,12 +158,18 @@ function(input, output, session) {
                 
                 
                 data_W_jTOT<-select(data_W_jTOT,-WT_j_pre,-WT_TOT)
-                print(data_W_jTOT)
+                #print(data_W_jTOT)
                 
                 result_j <- left_join(data_I_j, data_W_jTOT, by = c("year", "coicop", "geo"))
                 
                 # Annual rate for higher aggregate TOT
-                data_AR <- filter(data_I, coicop %in% input$coicop_ar)
+                
+                
+                if (input$contribution_type == "selected higher aggregate") {
+                        data_AR <- filter(data_I, coicop %in% input$coicop_ar)
+                } else if (input$contribution_type == "all-items HICP") {
+                        data_AR <- filter(data_I, coicop %in% "CP00")
+                }
                 
                 data_AR$year <- year(data_AR$time)
                 data_AR$month <- month(data_AR$time)
@@ -247,7 +269,7 @@ function(input, output, session) {
                 merged_data <- merge(data, label_set, by.x = "coicop", by.y = "coicop_code", all.x = TRUE)
                 merged_data <- merged_data %>%
                         mutate(code_label = ifelse(coicop == input$coicop_ar, NA, code_label))
-
+                
                 return(merged_data)
         })
         
@@ -577,8 +599,7 @@ function(input, output, session) {
                                         
                                         filtered_data$Contr_j <- ifelse(is.na(filtered_data$Contr_j), 0, filtered_data$Contr_j)
                                         
-                                        filtered_data_contr<-filter(filtered_data, coicop!=input$coicop_ar)
-                                        
+                
                                         # Check if all values in "Contr_j" are 0
                                         if(all(filtered_data$Contr_j == 0 & is.na(filtered_data$ann_rate_00))) {
                                                 # If all values are 0, add text "Data unavailable" in the middle
