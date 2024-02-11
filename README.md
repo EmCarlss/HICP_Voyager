@@ -1,6 +1,6 @@
 # HICP Voyager - Inflation dashboard for the european HICP
 
-A simple inflation dashboard for the Harmonised Index of Consumer Prices (HICP).
+A simple dashboard for the Harmonised Index of Consumer Prices (HICP).
 
 Version 1.3:
 - functionality to produce graph for annual rates of change (including Ribe contributions)
