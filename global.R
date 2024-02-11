@@ -1,5 +1,6 @@
 library(eurostat)
 library(dplyr)
+library(stringr)
 hikp_coicop <- get_eurostat("prc_hicp_midx", filters = list(geo = "DE", unit = "I15"))
 hicp_coicop2 <- label_eurostat(hikp_coicop, "coicop", eu_order = TRUE, code = c("coicop", "geo"))
 coicop_set <- select(hicp_coicop2, coicop_code, coicop)
