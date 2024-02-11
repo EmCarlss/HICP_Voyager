@@ -48,6 +48,8 @@ function(input, output, session) {
                                                                     #time = c(years),
                                                                     coicop =result),update_cache = TRUE)
                 
+                new_plot_w_data <<- TRUE
+                
                 data_no_na <- data %>%
                         filter(!is.na(values))
                 
@@ -103,6 +105,8 @@ function(input, output, session) {
                 data_W <- get_eurostat("prc_hicp_inw", filters = list(geo = input$countries_ar,
                                                                       #time = c(years),
                                                                       coicop =full_coicop),update_cache = TRUE)
+                
+                new_plot_ar_data <<- TRUE
                 
                 # Index data for aggregates j
                 data_I_j <- filter(data_I, coicop %in% result)
@@ -450,7 +454,7 @@ function(input, output, session) {
                         req(hikp_w_data())
                         data <- hikp_w_data()
                         
-                        if(is.null(input$coicop_w)==FALSE){
+                        if(is.null(input$coicop_w)==FALSE && is.null(input$countries_w)==FALSE){
                                 plotly_plot <- plot_ly(data, x = ~time, y = ~newbase, color = ~geo, linetype = ~coicop, type = 'scatter', mode = 'lines')
                                 
                                 #Create list to store subplots
@@ -540,7 +544,6 @@ function(input, output, session) {
                                 # Add the class "plot-container" to the labels box
                                 plotly_plot_w$x$attrs$legend$x$class <- "plot-container"
                                 
-                                
                                 return(plotly_plot_w)
                                 
                         }
@@ -556,7 +559,7 @@ function(input, output, session) {
                         data <- hikp_ar_data()
                         
                         
-                        if(is.null(input$coicop_ar)==FALSE){
+                        if(is.null(input$coicop_ar)==FALSE && is.null(input$countries_ar)==FALSE){
                                
                                 #Create list to store subplots
                                 subplots <- list()
@@ -650,6 +653,8 @@ function(input, output, session) {
                                 
                                 # Add the class "plot-container" to the labels box
                                 plotly_plot_ar$x$attrs$legend$x$class <- "plot-container"
+                                
+                                #Reset the new_plot_ar_data variable to ensure that plot is not shown unless new data is available
                                 
                                 
                                 return(plotly_plot_ar)

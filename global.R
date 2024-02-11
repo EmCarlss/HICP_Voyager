@@ -18,4 +18,7 @@ clean_eurostat_cache()
 
 new_plot_data<-FALSE
 new_rebased_data<-FALSE
+new_plot_ar_data<-FALSE
+new_plot_w_data<-FALSE
+
 #print(paste("Global newplotdata:",new_plot_data))
