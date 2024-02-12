@@ -1,4 +1,4 @@
-# HICP Voyager - dashboard for the european HICP
+# HICP Voyager - inflation dashboard for the european HICP
 
 A simple dashboard for the Harmonised Index of Consumer Prices (HICP).
 
