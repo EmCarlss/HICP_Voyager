@@ -476,25 +476,32 @@ function(input, output, session) {
                         req(hikp_w_data())
                         data <- hikp_w_data()
                         
+                        # Filter data based on selected years
+                        time_filtered_data <- data[as.numeric(format(data$time, "%Y")) >= input$range_slider_w[1] & as.numeric(format(data$time, "%Y")) <= input$range_slider_w[2], ]
+                        
+                        
+                        # Determine common max and min on y-axis
+                        weight_by_geo <- time_filtered_data %>%
+                                group_by(geo, time) %>%
+                                summarise(sum = sum(values, na.rm = TRUE))
+                        
+                        max_weight <-max(weight_by_geo$sum)
+                        
                         if(is.null(input$coicop_w)==FALSE && is.null(input$countries_w)==FALSE){
-                                plotly_plot <- plot_ly(data, x = ~time, y = ~newbase, color = ~geo, linetype = ~coicop, type = 'scatter', mode = 'lines')
+                                #plotly_plot <- plot_ly(filtered_data, x = ~time, y = ~newbase, color = ~geo, linetype = ~coicop, type = 'scatter', mode = 'lines')
                                 
                                 #Create list to store subplots
                                 subplots <- list()
                                 
                                 # Loop through each unique value in geo "geo"
                                 count <- 0
-                                for (geo_value in unique(data$geo)) {
+                                for (geo_value in unique(time_filtered_data$geo)) {
                                         
                                         # Filter dataset for the current geo value
                                         count <- count + 1
-                                        filtered_data <- data[data$geo == geo_value, ]
+                                        filtered_data <- time_filtered_data[time_filtered_data$geo == geo_value, ]
                                         
                                         filtered_data$values <- ifelse(is.na(filtered_data$values), 0, filtered_data$values)
-                                        
-                                        # Filtrera data baserat på valda årtal
-                                        filtered_data <- filtered_data[as.numeric(format(filtered_data$time, "%Y")) >= input$range_slider_w[1] & as.numeric(format(filtered_data$time, "%Y")) <= input$range_slider_w[2], ]
-                                        
                                         
                                         # Check if all values in "values" are 0
                                         if(all(filtered_data$values == 0)) {
@@ -524,8 +531,7 @@ function(input, output, session) {
                                                         subpl <- plot_ly(filtered_data, x = ~time, y = ~values, color = ~code_label, type = "bar", legendgroup = ~code_label, showlegend = FALSE)
                                                 }
                                                 
-                                                subpl <- subpl %>% layout(barmode = 'stack', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE))
-                                                
+                                                subpl <- subpl %>% layout(yaxis = list(range = c(0, max_weight*1.05)),barmode = 'stack', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE))
                                                 # Add axis labels
                                                 subpl <- subpl %>% layout(xaxis = list(title = ""), yaxis = list(title = "Weight, per mille"))
                                         }
@@ -580,6 +586,30 @@ function(input, output, session) {
                         req(hikp_ar_data(), input$coicop_ar)
                         data <- hikp_ar_data()
                         
+                        # Filter data based on selected year range
+                        time_filtered_data <- data[as.numeric(format(data$time, "%Y")) >= input$range_slider[1] & as.numeric(format(data$time, "%Y")) <= input$range_slider[2], ]
+                        
+                        
+                        # Determine common max and min on y-axis
+                        contr_by_geo <- time_filtered_data %>%
+                                                group_by(geo, time) %>%
+                                                summarise(sum_value = sum(Contr_j, na.rm = TRUE))
+                
+                        max_contr <-max(contr_by_geo$sum_value)
+                        
+                        min_contr <-min(contr_by_geo$sum_value)
+                        
+                        ar_00_by_geo <- time_filtered_data %>%
+                                group_by(geo, time) %>%
+                                summarise(max_value = max(ann_rate_00, na.rm = TRUE),min_value = min(ann_rate_00, na.rm = TRUE))
+                        
+                        max_ar_00 <-max(ar_00_by_geo$max_value)
+                        
+                        min_ar_00 <-min(ar_00_by_geo$min_value)
+                        
+                        max_ar<-max(max_ar_00,max_contr)
+                        
+                        min_ar<-min(min_ar_00,min_contr)
                         
                         if(is.null(input$coicop_ar)==FALSE && is.null(input$countries_ar)==FALSE){
                                
@@ -588,18 +618,14 @@ function(input, output, session) {
                                 
                                 # Loop through each unique value in geo "geo"
                                 count <- 0
-                                for (geo_value in unique(data$geo)) {
+                                for (geo_value in unique(time_filtered_data$geo)) {
                                         
                                         # Filter dataset for the current geo value
                                         count <- count + 1
-                                        filtered_data <- data[data$geo == geo_value, ]
-                                        
-                                        # Filter data based on selected year range
-                                        filtered_data <- filtered_data[as.numeric(format(filtered_data$time, "%Y")) >= input$range_slider[1] & as.numeric(format(filtered_data$time, "%Y")) <= input$range_slider[2], ]
+                                        filtered_data <- time_filtered_data[time_filtered_data$geo == geo_value, ]
                                         
                                         filtered_data$Contr_j <- ifelse(is.na(filtered_data$Contr_j), 0, filtered_data$Contr_j)
                                         
-                
                                         # Check if all values in "Contr_j" are 0
                                         if(all(filtered_data$Contr_j == 0 & is.na(filtered_data$ann_rate_00))) {
                                                 # If all values are 0, add text "Data unavailable" in the middle
@@ -627,7 +653,7 @@ function(input, output, session) {
                                                         subpl <- plot_ly(filtered_data, x = ~time, y = ~Contr_j, color = ~code_label, type = "bar", legendgroup = ~code_label, showlegend = FALSE)
                                                 }
                                                 
-                                                subpl <- subpl %>% layout(barmode = 'stack', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE))
+                                                subpl <- subpl %>% layout(yaxis = list(range = c(min_ar*(1/1.05), max_ar*1.05)),barmode = 'stack', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE))
                                                 # Lägg till linjediagram
                                                 subpl <- subpl %>% add_trace(filtered_data ,x = ~time, y = ~ann_rate_00, type = 'scatter', mode = 'lines', name = 'Annual rate M/M-12', line = list(color = 'black', dash = 'dash',width = 1.5))
         
@@ -700,7 +726,6 @@ function(input, output, session) {
                         data <- filter(data, time >= first_non_na_year)
                         
                         data$time <- as.Date(as.yearmon(data$time), format="%Y %B")
-                        
                         
                         if(is.null(input$coicops)==FALSE && new_plot_data==TRUE && new_rebased_data==TRUE){
                                 plotly_plot <- plot_ly(data, x = ~time, y = ~newbase, color = ~geo, linetype = ~coicop, type = 'scatter', mode = 'lines')
