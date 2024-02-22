@@ -359,7 +359,7 @@ function(input, output, session) {
                 
                 # Common filtering based on the first and last common years
                 
-                data <- filter(data, time > max(first_non_na_year) & time < min(last_non_na_year))
+                data <- filter(data, time >= max(first_non_na_year) & time <= min(last_non_na_year))
                 year_list<-unique(format(data$time, "%Y"))
                 print(year_list)
                 return(year_list)
@@ -408,7 +408,7 @@ function(input, output, session) {
                 
                 # Common filtering based on the first and last common years
                 
-                data <- filter(data, time > max(first_non_na_year) & time < min(last_non_na_year))
+                data <- filter(data, time >= max(first_non_na_year) & time <= min(last_non_na_year))
                 year_list<-unique(format(data$time, "%Y"))
                 print(year_list)
                 return(year_list)
@@ -585,7 +585,7 @@ function(input, output, session) {
                         
                         req(hikp_ar_data(), input$coicop_ar)
                         data <- hikp_ar_data()
-                        
+                        print(unique(data$time))
                         # Filter data based on selected year range
                         time_filtered_data <- data[as.numeric(format(data$time, "%Y")) >= input$range_slider[1] & as.numeric(format(data$time, "%Y")) <= input$range_slider[2], ]
                         
