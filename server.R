@@ -6,7 +6,6 @@ library(zoo)
 library(lubridate)
 library(plotly)
 
-
 function(input, output, session) {
         
         hikp_data <- eventReactive(input$update, {
@@ -372,7 +371,7 @@ function(input, output, session) {
                 print(str(year_choices))
                 max_year<-as.numeric(max(year_choices))
                 min_year<-as.numeric(min(year_choices))
-                updateSliderInput(session, "range_slider_w", min = min_year, max = max_year,step=1, value = c(min_year, max_year))
+                updateSliderInput(session, "range_slider_w", min = min_year, max = max_year,step=1, value = c(max(c(max_year-5, min_year)), max_year))
                 req(hikp_w_data, input$update_w, input$countries_w, input$coicop_w)
         })
         
@@ -421,7 +420,7 @@ function(input, output, session) {
                 print(str(year_choices))
                 max_year<-as.numeric(max(year_choices))
                 min_year<-as.numeric(min(year_choices))
-                updateSliderInput(session, "range_slider", min = min_year, max = max_year,step=1, value = c(min_year, max_year))
+                updateSliderInput(session, "range_slider", min = min_year, max = max_year,step=1, value = c(max(c(max_year-2, min_year)), max_year))
                 req(hikp_ar_data, input$update_ar, input$countries_ar, input$coicop_ar)
         })
         
