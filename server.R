@@ -66,8 +66,6 @@ function(input, output, session) {
                 
                 data <- filter(data, time >= max(first_non_na_year))
 
-                
-                
                 label_set<-select(coicop_set_hierarchy, coicop_code, code_label)
                 
                 # Merged datasets based on ID-column
@@ -107,8 +105,6 @@ function(input, output, session) {
                                 full_coicop<-result
 
                 }
-                
-                
                 
                 #Get the index data
                 data_I <- get_eurostat("prc_hicp_midx", filters = list(geo = input$countries_ar,
@@ -388,7 +384,6 @@ function(input, output, session) {
                 max_years <- data_no_na %>%
                         group_by(geo) %>%
                         summarise(max_year = max(time,na.rm=TRUE))
-
                 
                 min_years <- data_no_na %>%
                         group_by(geo) %>%

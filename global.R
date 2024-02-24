@@ -12,6 +12,9 @@ coicop_set_hierarchy$level <- nchar(gsub("\\D", "", coicop_set_hierarchy$coicop_
 coicop_set_hierarchy$level <- ifelse(coicop_set_hierarchy$coicop_code == "CP00", 1, nchar(gsub("\\D", "", coicop_set_hierarchy$coicop_code)))
 coicop_set_hierarchy$parent_code <- ifelse(coicop_set_hierarchy$level > 2, substr(coicop_set_hierarchy$coicop_code, 1, nchar(coicop_set_hierarchy$coicop_code) - 1), NA)
 coicop_set_hierarchy$parent_code <- ifelse(coicop_set_hierarchy$level == 2 & coicop_set_hierarchy$coicop_code != "CP00", "CP00", ifelse(coicop_set_hierarchy$level > 2, substr(coicop_set_hierarchy$coicop_code, 1, nchar(coicop_set_hierarchy$coicop_code) - 1), NA))
+coicop_set_hierarchy$parent_code<-  ifelse(coicop_set_hierarchy$coicop_code == "CP0820", "CP08",coicop_set_hierarchy$parent_code)
+coicop_set_hierarchy$parent_code<-  ifelse(coicop_set_hierarchy$coicop_code == "CP0830", "CP08",coicop_set_hierarchy$parent_code)
+
 label_set<-select(coicop_set_hierarchy, coicop_code, code_label)
 
 clean_eurostat_cache()
