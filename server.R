@@ -255,8 +255,8 @@ function(input, output, session) {
                 
                 data <- filter(data, time >= max(first_non_na_year))
                 
-                data <- data %>%
-                        filter(!is.na(ann_rate_00) | !is.na(Contr_j))
+                #data <- data %>%
+                #        filter(!is.na(ann_rate_00) | !is.na(Contr_j))
                 
                 label_set<-select(coicop_set_hierarchy, coicop_code, code_label)
                 
@@ -356,7 +356,7 @@ function(input, output, session) {
                 
                 data <- filter(data, time >= max(first_non_na_year) & time <= min(last_non_na_year))
                 year_list<-unique(format(data$time, "%Y"))
-                print(year_list)
+                
                 return(year_list)
                 
         })
@@ -364,7 +364,7 @@ function(input, output, session) {
         observe({
                 req(hikp_w_data())
                 year_choices <- selected_w_data()
-                print(str(year_choices))
+                
                 max_year<-as.numeric(max(year_choices))
                 min_year<-as.numeric(min(year_choices))
                 updateSliderInput(session, "range_slider_w", min = min_year, max = max_year,step=1, value = c(max(c(max_year-5, min_year)), max_year))
@@ -404,7 +404,7 @@ function(input, output, session) {
                 
                 data <- filter(data, time >= max(first_non_na_year) & time <= min(last_non_na_year))
                 year_list<-unique(format(data$time, "%Y"))
-                print(year_list)
+                
                 return(year_list)
         
         })
@@ -412,7 +412,7 @@ function(input, output, session) {
         observe({
                 req(hikp_ar_data())
                 year_choices <- selected_ar_data()
-                print(str(year_choices))
+                
                 max_year<-as.numeric(max(year_choices))
                 min_year<-as.numeric(min(year_choices))
                 updateSliderInput(session, "range_slider", min = min_year, max = max_year,step=1, value = c(max(c(max_year-2, min_year)), max_year))
@@ -579,7 +579,7 @@ function(input, output, session) {
                         
                         req(hikp_ar_data(), input$coicop_ar)
                         data <- hikp_ar_data()
-                        print(unique(data$time))
+                        
                         # Filter data based on selected year range
                         time_filtered_data <- data[as.numeric(format(data$time, "%Y")) >= input$range_slider[1] & as.numeric(format(data$time, "%Y")) <= input$range_slider[2], ]
                         
