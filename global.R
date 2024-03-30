@@ -37,8 +37,6 @@ coicop_set_hierarchy$parent_code<-  ifelse(coicop_set_hierarchy$coicop_code == "
 coicop_set_hierarchy$parent_code<-  ifelse(coicop_set_hierarchy$coicop_code == "CP08304", "CP0830",coicop_set_hierarchy$parent_code)
 coicop_set_hierarchy$parent_code<-  ifelse(coicop_set_hierarchy$coicop_code == "CP08305", "CP0830",coicop_set_hierarchy$parent_code)
 
-print(filter(coicop_set_hierarchy,coicop_set_hierarchy$coicop_code== "CP08101"))
-
 label_set<-select(coicop_set_hierarchy, coicop_code, code_label)
 
 clean_eurostat_cache()
@@ -47,5 +45,3 @@ new_plot_data<-FALSE
 new_rebased_data<-FALSE
 new_plot_ar_data<-FALSE
 new_plot_w_data<-FALSE
-
-#print(paste("Global newplotdata:",new_plot_data))

@@ -32,7 +32,7 @@ ui <- fluidPage(theme = bs_theme(bootswatch = "minty"),
   }     
   ")),        
         tags$div(
-                tags$h1("HICP Voyager 1.3", style = "text-align: left; margin-bottom: 10px; margin-top: 10px;font-size: 20px;")
+                tags$h1("HICP Voyager 1.4", style = "text-align: left; margin-bottom: 10px; margin-top: 10px;font-size: 20px;")
         ),
         navbarPage(
                 title = "",
@@ -57,8 +57,67 @@ ui <- fluidPage(theme = bs_theme(bootswatch = "minty"),
                                                 downloadLink('downloadData', 'Download data')
                                         )
                                  ),
+                                 column(width = 8, div(style = "max-width: 700px; width: 100%;",
+                                        plotlyOutput("plot")))
+                                )
+                ),
+                tabPanel("M/M-1",
+                         fluidRow(
+                                 column(width = 4,
+                                        selectInput("countries_mr", "Select countries:", choices = setNames(eurostat_countries$code, eurostat_countries$name), multiple = TRUE),
+                                        selectInput("coicop_mr", "Select product category:", choices = setNames(label_set$coicop_code, label_set$code_label), multiple = FALSE),
+                                        br(),
+                                        radioButtons("contribution_type", "Contribution to", choices = c("selected higher aggregate", "all-items HICP"), selected = "selected higher aggregate"),
+                                        br(),
+                                        actionButton("update_mr", "Retrieve data"), 
+                                        br(),
+                                        br(),
+                                        selectInput("select_period_mr", "Select months to compare:", choices = "", multiple = TRUE),
+                                        p(" "),
+                                        #conditionalPanel(
+                                        #        condition = "output.plot_mr",
+                                        #       sliderInput("range_slider_m", "Select period:", min = 2000, max = 2023, value = c(2015, 2023), ticks=FALSE, sep="")),
+                                        p(" "),
+                                        br(),
+                                        p(" "),
+                                        br(),
+                                        conditionalPanel(
+                                                condition = "output.plot_mr",
+                                                downloadLink('downloadData_mr', 'Download data')
+                                        )
+                                 ),
                                  column(width = 8,
-                                        plotlyOutput("plot")
+                                        plotlyOutput("plot_mr")
+                                 )
+                         )
+                ),
+                tabPanel("M/M-12",
+                         fluidRow(
+                                 column(width = 4,
+                                        selectInput("countries_ar", "Select countries:", choices = setNames(eurostat_countries$code, eurostat_countries$name), multiple = TRUE),
+                                        selectInput("coicop_ar", "Select product category:", choices = setNames(label_set$coicop_code, label_set$code_label), multiple = FALSE),
+                                        br(),
+                                        radioButtons("contribution_type", "Contribution to", choices = c("selected higher aggregate", "all-items HICP"), selected = "selected higher aggregate"),
+                                        br(),
+                                        actionButton("update_ar", "Retrieve data"), 
+                                        br(),
+                                        br(),
+                                        
+                                        p(" "),
+                                        conditionalPanel(
+                                                condition = "output.plot_ar",
+                                                sliderInput("range_slider", "Select period:", min = 2000, max = 2023, value = c(2015, 2023), ticks=FALSE, sep="")),
+                                        p(" "),
+                                        br(),
+                                        p(" "),
+                                        br(),
+                                        conditionalPanel(
+                                                condition = "output.plot_ar",
+                                                downloadLink('downloadData_ar', 'Download data')
+                                        )
+                                 ),
+                                 column(width = 8,
+                                        plotlyOutput("plot_ar")
                                  )
                          )
                 ),
@@ -88,41 +147,13 @@ ui <- fluidPage(theme = bs_theme(bootswatch = "minty"),
                                  )
                          )
                 ),
-                tabPanel("M/M-12",
-                         fluidRow(
-                                 column(width = 4,
-                                        selectInput("countries_ar", "Select countries:", choices = setNames(eurostat_countries$code, eurostat_countries$name), multiple = TRUE),
-                                        selectInput("coicop_ar", "Select product category:", choices = setNames(label_set$coicop_code, label_set$code_label), multiple = FALSE),
-                                        br(),
-                                        radioButtons("contribution_type", "Contribution to", choices = c("selected higher aggregate", "all-items HICP"), selected = "selected higher aggregate"),
-                                        br(),
-                                        actionButton("update_ar", "Retrieve data"), 
-                                        br(),
-                                        br(),
-                                        
-                                        p(" "),
-                                        conditionalPanel(
-                                                condition = "output.plot_ar",
-                                        sliderInput("range_slider", "Select period:", min = 2000, max = 2023, value = c(2015, 2023), ticks=FALSE, sep="")),
-                                        p(" "),
-                                        br(),
-                                        p(" "),
-                                        br(),
-                                        conditionalPanel(
-                                                condition = "output.plot_ar",
-                                                downloadLink('downloadData_ar', 'Download data')
-                                        )
-                                 ),
-                                 column(width = 8,
-                                        plotlyOutput("plot_ar")
-                                 )
-                         )
-                ),
+                
+                
                 tabPanel("Help",
                          h5("Navigate seamlessly in the universe of european price statistics"),
                          br(),p("This app enables to produce graphs for the all-items level or any subcomponent(s) in the european HICP (Harmonized Index of Consumer Prices). Currently graphs for indices, weights and annual rates can be produced.",
                                 br(),p(" "),"For the Index tab, users can set a new reference period (month or year), common for all selected index series.",br(),p(" "),
-                                "For the M/M-12 tab (annual rates of change), Ribe contributions are calculated for the level directly below the selected aggregate (following formula in Eurostat's HICP Methodological manual, p 182-183). The Ribe contribution is also described in"),
+                                "For the M/M-12 (annual rates of change) and M/M-1 (monthly rates of change), Ribe contributions are calculated for the level directly below the selected aggregate (following formula in Eurostat's HICP Methodological manual, p 182-183). The Ribe contribution is also described in"),
                                 HTML('<a href="https://www.oecd.org/sdd/prices-ppp/OECD-calculation-contributions-annual-inflation.pdf"), target="_blank">https://www.oecd.org/sdd/prices-ppp/OECD-calculation-contributions-annual-inflation.pdf</a>'),
                          br(),p(" "), "Data is retrieved using the 'eurostat' package from the Eurostat HICP database. Additional calculations are performed where needed." 
                          
