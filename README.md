@@ -3,9 +3,9 @@
 A simple R Shiny dashboard for the Harmonised Index of Consumer Prices (HICP).
 
 Features
-  - Analyze indices, item weights and annual rates (M/M-12) across countries.
+  - Analyze indices, item weights monthly (M/M-1) and annual rates (M/M-12) across countries.
   - Rebase indices to preferred index reference period.
-  - See contributions to annual rates of change for selected aggregates.
+  - See contributions to monthly and annual rates of change for selected aggregates.
 
 Live demo:
 https://emcarlss.shinyapps.io/HICP_Voyager/
