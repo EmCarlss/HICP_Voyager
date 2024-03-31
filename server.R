@@ -416,7 +416,7 @@ function(input, output, session) {
                 result_jTOT2 <- full_join(result_jTOT2, data_MR, by = c("year","time", "month", "geo", "coicop"))
                 
                 data<-select(result_jTOT2,year,month,time, geo, coicop, m_rate_00, Contr_j)
-                
+             
                 
                 data_no_na <- data %>%
                         filter(is.numeric(Contr_j) | is.numeric(m_rate_00))
@@ -435,7 +435,7 @@ function(input, output, session) {
                 
                 data <- data %>%
                         filter(!is.na(m_rate_00) | !is.na(Contr_j))
-                
+               
                 label_set<-select(coicop_set_hierarchy, coicop_code, code_label)
                 
                 # Merged datasets based on ID-column
@@ -604,8 +604,10 @@ function(input, output, session) {
                 data <- data[data$geo %in% input$countries_mr, ]
                 
                 # Remove NAs in column values
+                
                 data_no_na <- data %>%
-                        filter(is.numeric(Contr_j) | is.numeric(m_rate_00), month == 1 | month == 12)
+                        filter(is.numeric(Contr_j) | is.numeric(m_rate_00))
+                
                 
                 max_years <- data_no_na %>%
                         group_by(geo) %>%
@@ -634,16 +636,6 @@ function(input, output, session) {
                 return(period_list)
                 
         })
-        
-        #observe({
-        #        req(hikp_mr_data())
-        #        year_choices <- selected_mr_data()
-        #        
-        #        max_year<-as.numeric(max(year_choices))
-        #        min_year<-as.numeric(min(year_choices))
-        #        updateSliderInput(session, "range_slider_m", min = min_year, max = max_year,step=1, value = c(max(c(max_year-2, min_year)), max_year))
-        #        req(hikp_mr_data, input$update_mr, input$countries_mr, input$coicop_mr)
-        #})
         
         # Update selectInput to show the list of available periods (monthly rate)
         observe({
@@ -682,6 +674,7 @@ function(input, output, session) {
                 if (input$period_type == "Full year") {
                         rebased_data <- rebased_data %>% filter(as.numeric(format(time, "%Y")) >= as.numeric(input$select_years))
                 } else if (input$period_type == "Month") {
+                        
                         # Extract year and month
                         selected_year <- as.numeric(str_extract(input$select_years, "\\d{4}"))
                         selected_month <- match(tolower(str_extract(input$select_years, "[A-Za-z]+")), tolower(month.name))
@@ -714,7 +707,6 @@ function(input, output, session) {
                         max_weight <-max(weight_by_geo$sum)
                         
                         if(is.null(input$coicop_w)==FALSE && is.null(input$countries_w)==FALSE){
-                                #plotly_plot <- plot_ly(filtered_data, x = ~time, y = ~newbase, color = ~geo, linetype = ~coicop, type = 'scatter', mode = 'lines')
                                 
                                 #Create list to store subplots
                                 subplots <- list()
@@ -731,6 +723,7 @@ function(input, output, session) {
                                         
                                         # Check if all values in "values" are 0
                                         if(all(filtered_data$values == 0)) {
+                                                
                                                 # If all values are 0, add text "Data unavailable" in the middle
                                                 text_annotation <- list(
                                                         x = 0.25,
@@ -784,13 +777,12 @@ function(input, output, session) {
                                 # Create layout for the frame graph, size depending on number of selected countries
                                 layout <- plotly::subplot(subplots, nrows = plot_rows, titleX=TRUE, shareX=TRUE,titleY=TRUE,shareY=TRUE)
                                 
-                                if(length(subplots)>=2){
-                                layout <- layout %>% layout(height = plot_rows*250,width=1000)
+                                if(length(subplots)>2){
+                                layout <- layout %>% layout(height = plot_rows*300,width=1100)
                                 }
-                                if(length(subplots)==1){
-                                        layout <- layout %>% layout(height = plot_rows*250,width=1000)
+                                if(length(subplots)<=2){
+                                        layout <- layout %>% layout(height = plot_rows*475,width=1100)
                                 }
-                                
                                 
                                 # Create the frame graph
                                 plotly_plot_w <- plotly_build(layout)
@@ -835,7 +827,7 @@ function(input, output, session) {
                         
                         max_ar<-max(max_ar_00,max_contr)
                         
-                        min_ar<-min(min_ar_00,min_contr)
+                        min_ar<-min(min_ar_00,min_contr,0)
                         
                         if(is.null(input$coicop_ar)==FALSE && is.null(input$countries_ar)==FALSE){
                                
@@ -854,6 +846,7 @@ function(input, output, session) {
                                         
                                         # Check if all values in "Contr_j" are 0
                                         if(all(filtered_data$Contr_j == 0 & is.na(filtered_data$ann_rate_00))) {
+                                                
                                                 # If all values are 0, add text "Data unavailable" in the middle
                                                 text_annotation <- list(
                                                         x = 0.25,
@@ -880,8 +873,8 @@ function(input, output, session) {
                                                         subpl <- plot_ly(filtered_data, x = ~time, y = ~Contr_j, color = ~code_label, type = "bar", legendgroup = ~code_label, showlegend = FALSE)
                                                 }
                                                 
-                                                subpl <- subpl %>% layout(yaxis = list(range = c(min_ar*(1/1.05), max_ar*1.05)),barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE),xaxis = list(tickformat = "%Y %B"))
-                                                # Lägg till linjediagram
+                                                subpl <- subpl %>% layout(yaxis = list(range = c(min_ar-2, max_ar+2)),barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE),xaxis = list(tickformat = "%Y %B"))
+                                                # Add a line for annual rate
                                                 subpl <- subpl %>% add_trace(filtered_data ,x = ~time, y = ~ann_rate_00, type = 'scatter', mode = 'lines', name = 'Annual rate M/M-12', line = list(color = 'black', dash = 'dash',width = 1.5))
         
                                                 
@@ -912,13 +905,13 @@ function(input, output, session) {
                                 layout <- plotly::subplot(subplots, nrows = plot_rows, titleX=TRUE, shareX=TRUE,titleY=TRUE,shareY=TRUE)
                                 
                                 # Customize the legend text with word-wrapping
-                                layout <- layout %>% layout(legend.text = geo_value, legend.traceorder = "reversed")
+                                layout <- layout %>% layout(legend.text = geo_value,font = list(size = 11), legend.traceorder = "reversed")
                                 
-                                if(length(subplots)>=2){
-                                        layout <- layout %>% layout(height = plot_rows*275,width=1000)
+                                if(length(subplots)>2){
+                                        layout <- layout %>% layout(height = plot_rows*300,width=1100)
                                 }
-                                if(length(subplots)==1){
-                                        layout <- layout %>% layout(height = plot_rows*275,width=1000)
+                                if(length(subplots)<=2){
+                                        layout <- layout %>% layout(height = plot_rows*475,width=1100)
                                 }
                                 
                                 
@@ -946,7 +939,7 @@ function(input, output, session) {
                         data <- hikp_mr_data()
                         
                         # Filter data based on selected year range
-                        #time_filtered_data <- data[as.numeric(format(data$time, "%Y %B")) >= input$range_slider_m[1] & as.numeric(format(data$time, "%Y %B")) <= input$range_slider_m[2], ]
+                        
                         time_filtered_data <- data[format(data$time, "%Y %B") %in% input$select_period_mr, ]
                         
                         # Determine common max and min on y-axis
@@ -1031,9 +1024,7 @@ function(input, output, session) {
                                                         subpl <- plot_ly(filtered_data, x = ~time, y = ~Contr_j, color = ~code_label, type = "bar", legendgroup = ~code_label, showlegend = FALSE)
                                                 }
                                                 
-                                                subpl <- subpl %>% layout(yaxis = list(range = c((min_mr-1.5), max_mr + 1.5)),barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE))
-                                                
-                                                ##, yref = "paper", yanchor = "bottom", 
+                                                subpl <- subpl %>% layout(yaxis = list(range = c((min_mr-1.0), max_mr + 1.0)),barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE))
                                                 
                                                 # Lägg till linjediagram
                                                 subpl <- subpl %>% add_trace(filtered_data ,x = ~time, y = ~m_rate_00, type = 'scatter', mode = 'markers', name = 'Monthly rate M/M-1', marker = list(color = 'black', size = 10))
@@ -1066,13 +1057,13 @@ function(input, output, session) {
                                 layout <- plotly::subplot(subplots, nrows = plot_rows, titleX=TRUE, shareX=TRUE,titleY=TRUE,shareY=TRUE)
                                 
                                 # Customize the legend text with word-wrapping
-                                layout <- layout %>% layout(legend.text = geo_value, legend.traceorder = "reversed")
+                                layout <- layout %>% layout(legend.text = geo_value,font = list(size = 11), legend.traceorder = "reversed")
                                 
-                                if(length(subplots)>=2){
-                                        layout <- layout %>% layout(height = plot_rows*275,width=1000)
+                                if(length(subplots)>2){
+                                        layout <- layout %>% layout(height = plot_rows*300,width=1100)
                                 }
-                                if(length(subplots)==1){
-                                        layout <- layout %>% layout(height = plot_rows*275,width=1000)
+                                if(length(subplots)<=2){
+                                        layout <- layout %>% layout(height = plot_rows*475,width=1100)
                                 }
                                 
                                 
@@ -1119,7 +1110,7 @@ function(input, output, session) {
                                                 ),
                                                 xaxis = list(
                                                         title = ""), 
-                                                legend = list(font = list(color = "black")),
+                                                legend = list(font = list(color = "black",size=11)),
                                                 annotations = list(
                                                         x = 1,
                                                         y = 0,
