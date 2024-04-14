@@ -3,7 +3,7 @@
 A simple R Shiny dashboard for the Harmonised Index of Consumer Prices (HICP).
 
 Features
-  - Analyze indices, item weights monthly (M/M-1) and annual rates (M/M-12) across countries.
+  - Analyze indices, (M/M-1),annual rates (M/M-12), seasonality (M/December Y-1) and weights across countries.
   - Rebase indices to preferred index reference period.
   - See contributions to monthly and annual rates of change for selected aggregates.
 
