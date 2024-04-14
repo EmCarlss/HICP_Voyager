@@ -121,6 +121,34 @@ ui <- fluidPage(theme = bs_theme(bootswatch = "minty"),
                                  )
                          )
                 ),
+                tabPanel("Seasonality",
+                         fluidRow(
+                                 column(width =3,
+                                        selectInput("countries_se", "Select countries:", choices = setNames(eurostat_countries$code, eurostat_countries$name), multiple = TRUE),
+                                        selectInput("coicop_se", "Select product category:", choices = setNames(coicop_set$coicop_code, coicop_set$code_label), multiple = FALSE),
+                                        
+                                        br(),
+                                        actionButton("update_se", "Retrieve data"), 
+                                        br(),
+                                        br(),
+                                        
+                                        p(" "),
+                                        br(),
+                                        selectInput("select_years_se", "Select years to compare:", choices = "", multiple = TRUE),
+                                        p(" "),
+                                        br(),
+                                        p(" "),
+                                        br(),
+                                        conditionalPanel(
+                                                condition = "output.plot_se",
+                                                downloadLink('downloadData_se', 'Download data')
+                                        )
+                                 ),
+                                 column(width = 8,
+                                        plotlyOutput("plot_se")
+                                 )
+                         )
+                ),
                 tabPanel("Weights",
                          fluidRow(
                                  column(width = 3,
@@ -151,9 +179,10 @@ ui <- fluidPage(theme = bs_theme(bootswatch = "minty"),
                 
                 tabPanel("Help",
                          h5("Navigate seamlessly in the universe of european price statistics"),
-                         br(),p("This app enables to produce graphs for the all-items level or any subcomponent(s) in the european HICP (Harmonized Index of Consumer Prices). Currently graphs for indices, weights and annual rates can be produced.",
+                         br(),p("This app enables to produce graphs for the all-items level or any subcomponent(s) in the european HICP (Harmonized Index of Consumer Prices). Currently graphs for indices, monthly rates, annual rates, seasonality and weights can be produced.",
                                 br(),p(" "),"For the Index tab, users can set a new reference period (month or year), common for all selected index series.",br(),p(" "),
                                 "For the M/M-12 (annual rates of change) and M/M-1 (monthly rates of change), Ribe contributions are calculated for the level directly below the selected aggregate (following formula in Eurostat's HICP Methodological manual, p 182-183). The Ribe contribution is also described in"),
+                         br(),p(" "),"For the Seasonaliy tab, indices with December previous year =100 are produced.",br(),p(" "),
                                 HTML('<a href="https://www.oecd.org/sdd/prices-ppp/OECD-calculation-contributions-annual-inflation.pdf"), target="_blank">https://www.oecd.org/sdd/prices-ppp/OECD-calculation-contributions-annual-inflation.pdf</a>'),
                          br(),p(" "), "Data is retrieved using the 'eurostat' package from the Eurostat HICP database. Additional calculations are performed where needed." 
                          
