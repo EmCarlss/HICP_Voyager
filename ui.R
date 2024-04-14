@@ -32,7 +32,7 @@ ui <- fluidPage(theme = bs_theme(bootswatch = "minty"),
   }     
   ")),        
         tags$div(
-                tags$h1("HICP Voyager 1.4", style = "text-align: left; margin-bottom: 10px; margin-top: 10px;font-size: 20px;")
+                tags$h1("HICP Voyager 1.5", style = "text-align: left; margin-bottom: 10px; margin-top: 10px;font-size: 20px;")
         ),
         navbarPage(
                 title = "",
@@ -97,7 +97,7 @@ ui <- fluidPage(theme = bs_theme(bootswatch = "minty"),
                                         selectInput("countries_ar", "Select countries:", choices = setNames(eurostat_countries$code, eurostat_countries$name), multiple = TRUE),
                                         selectInput("coicop_ar", "Select product category:", choices = setNames(label_set$coicop_code, label_set$code_label), multiple = FALSE),
                                         br(),
-                                        radioButtons("contribution_type", "Contribution to", choices = c("selected higher aggregate", "all-items HICP"), selected = "selected higher aggregate"),
+                                        radioButtons("contribution_type_ar", "Contribution to", choices = c("selected higher aggregate", "all-items HICP"), selected = "selected higher aggregate"),
                                         br(),
                                         actionButton("update_ar", "Retrieve data"), 
                                         br(),
