@@ -112,6 +112,8 @@ function(input, output, session) {
                                                                        unit="I15",
                                                                        coicop =full_coicop),update_cache = TRUE)
                 
+                
+                
                 # Get weights
                 data_W <- get_eurostat("prc_hicp_inw", filters = list(geo = input$countries_ar,
                                                                       #time = c(years),
@@ -225,8 +227,8 @@ function(input, output, session) {
                                 Contr_j = if_else(
                                         rowSums(is.na(across(all_of(numeric_vars)))) > 0,
                                         NA,
-                                        (100 * (IX_TOT_12_ymin1 / IX_TOT_m_ymin1 * WT_j_12_ymin1 / 1000) * ((IX_j - IX_j_12_ymin1) / IX_j_12_ymin1)) +
-                                                100 * ((IX_TOT_12_ymin2 / IX_TOT_m_ymin1 * WT_j_12_ymin2 / 1000) * ((IX_j_12_ymin1 - IX_j_m_ymin1) / IX_j_12_ymin2))
+                                        (100 * (IX_TOT_12_ymin1 / IX_TOT_m_ymin1 * WT_j / 1000) * ((IX_j - IX_j_12_ymin1) / IX_j_12_ymin1)) +
+                                                100 * ((IX_TOT_12_ymin2 / IX_TOT_m_ymin1 * WT_j_12_ymin1 / 1000) * ((IX_j_12_ymin1 - IX_j_m_ymin1) / IX_j_12_ymin2))
                                 )
                         )
                 
@@ -251,9 +253,6 @@ function(input, output, session) {
                 
                 data <- filter(data, time >= max(first_non_na_year))
                 
-                #data <- data %>%
-                #        filter(!is.na(ann_rate_00) | !is.na(Contr_j))
-                
                 label_set<-select(coicop_set_hierarchy, coicop_code, code_label)
                 
                 if (input$contribution_type_ar == "selected higher aggregate") {
@@ -266,8 +265,6 @@ function(input, output, session) {
                         # Merged datasets based on ID-column
                         merged_data <- merge(data, label_set, by.x = "coicop", by.y = "coicop_code", all.x = TRUE)
                 }
-                
-                
                 
                 return(merged_data)
         })

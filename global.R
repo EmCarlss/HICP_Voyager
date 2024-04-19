@@ -23,7 +23,6 @@ coicop_set_hierarchy <- coicop_set_hierarchy %>%
                 )
         )
 
-
 coicop_set_hierarchy$parent_code<-  ifelse(coicop_set_hierarchy$coicop_code == "CP0820", "CP08",coicop_set_hierarchy$parent_code)
 coicop_set_hierarchy$parent_code<-  ifelse(coicop_set_hierarchy$coicop_code == "CP08201", "CP0820",coicop_set_hierarchy$parent_code)
 coicop_set_hierarchy$parent_code<-  ifelse(coicop_set_hierarchy$coicop_code == "CP08202", "CP0820",coicop_set_hierarchy$parent_code)
