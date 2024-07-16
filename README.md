@@ -1,4 +1,4 @@
-# HICP Voyager - Inflation dashboard for the European HICP
+# HICP Voyager - Inflation dashboard for Europe
 
 A simple R Shiny dashboard for the Harmonised Index of Consumer Prices (HICP).
 
