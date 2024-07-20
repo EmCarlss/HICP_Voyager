@@ -7,7 +7,7 @@ Features
   - Rebase indices to preferred index reference period.
   - See contributions to monthly and annual rates of change for selected aggregates.
 
-Live demo:
+Online access:
 https://emcarlss.shinyapps.io/HICP_Voyager/
 
 Data retrieved from Eurostat using the R 'eurostat' package.
