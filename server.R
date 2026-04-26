@@ -8,44 +8,150 @@ library(plotly)
 
 function(input, output, session) {
         
+        add_country_group_observers <- function(prefix, input_id, session, input, country_groups) {
+                observeEvent(input[[paste0(prefix, "_eu")]], {
+                        updateSelectInput(session, input_id, selected = country_groups[["All EU countries"]])
+                })
+                
+                observeEvent(input[[paste0(prefix, "_efta")]], {
+                        updateSelectInput(session, input_id, selected = country_groups[["EFTA"]])
+                })
+                
+                observeEvent(input[[paste0(prefix, "_eu_efta")]], {
+                        updateSelectInput(session, input_id, selected = country_groups[["EU + EFTA"]])
+                })
+                
+                observeEvent(input[[paste0(prefix, "_med")]], {
+                        updateSelectInput(session, input_id, selected = country_groups[["Mediterranean"]])
+                })
+                
+                observeEvent(input[[paste0(prefix, "_nordic")]], {
+                        updateSelectInput(session, input_id, selected = country_groups[["Nordic"]])
+                })
+                
+                observeEvent(input[[paste0(prefix, "_balkan")]], {
+                        updateSelectInput(session, input_id, selected = country_groups[["Balkan"]])
+                })
+                
+                observeEvent(input[[paste0(prefix, "_central")]], {
+                        updateSelectInput(session, input_id, selected = country_groups[["Central"]])
+                })
+                
+                observeEvent(input[[paste0(prefix, "_eastern")]], {
+                        updateSelectInput(session, input_id, selected = country_groups[["Eastern"]])
+                })
+                
+                observeEvent(input[[paste0(prefix, "_western")]], {
+                        updateSelectInput(session, input_id, selected = country_groups[["Western"]])
+                })
+                
+                observeEvent(input[[paste0(prefix, "_benelux")]], {
+                        updateSelectInput(session, input_id, selected = country_groups[["Benelux"]])
+                })
+                
+                observeEvent(input[[paste0(prefix, "_clear")]], {
+                        updateSelectInput(session, input_id, selected = character(0))
+                })
+        }
+        
+        
+        add_country_group_observers("index", "countries", session, input, country_groups)
+        add_country_group_observers("mr", "countries_mr", session, input, country_groups)
+        add_country_group_observers("ar", "countries_ar", session, input, country_groups)
+        add_country_group_observers("se", "countries_se", session, input, country_groups)
+        add_country_group_observers("weights", "countries_w", session, input, country_groups)
+        
+        wrap_legend <- function(x, width = 45) {
+                x %>%
+                        stringr::str_wrap(width = width) %>%
+                        gsub("\n", "<br>", .)
+        }
+        
         hikp_data <- eventReactive(input$update, {
-                req(input$countries, input$coicops)
+                req(input$countries, input$coicops, input$index_measure)
+                
+                validate(
+                        need(
+                                !(length(input$index_measure) == 2 && length(input$coicops) > 1),
+                                "When both HICP and HICP-CT are selected, please select only one COICOP aggregate."
+                        )
+                )
+                
+                coicops <- ifelse(input$coicops == "CP00", "TOTAL", input$coicops)
                 
                 tryCatch({
-                        data <- get_eurostat("prc_hicp_midx", filters = list(unit = "I15",
-                                                                             geo = input$countries,
-                                                                             coicop = input$coicops))
+                        
+                        data_list <- list()
+                        
+                        if ("HICP" %in% input$index_measure) {
+                                data_hicp <- get_eurostat(
+                                        "prc_hicp_minr",
+                                        filters = list(
+                                                unit = "I25",
+                                                geo = input$countries,
+                                                coicop18 = coicops
+                                        ),
+                                        update_cache = TRUE
+                                )
+                                
+                                data_hicp <- data_hicp %>%
+                                        mutate(measure = "HICP")
+                                
+                                data_list[["HICP"]] <- data_hicp
+                        }
+                        
+                        if ("HICP_CT" %in% input$index_measure) {
+                                data_ct <- get_eurostat(
+                                        "prc_hicp_ct",
+                                        filters = list(
+                                                unit = "I25",
+                                                geo = input$countries,
+                                                coicop18 = coicops
+                                        ),
+                                        update_cache = TRUE
+                                )
+                                
+                                data_ct <- data_ct %>%
+                                        mutate(measure = "HICP-CT")
+                                
+                                data_list[["HICP_CT"]] <- data_ct
+                        }
+                        
+                        data <- bind_rows(data_list)
                         clean_eurostat_cache()
+                        
                         data$time <- as.yearmon(data$time)
                         
                         new_plot_data <<- TRUE
                         
                         return(data)
-                }, error = function(e) {
-                        #Message if no data
-                        print(paste("No data available:", e$message))
                         
-                remove("hikp_data", envir = .GlobalEnv)
+                }, error = function(e) {
+                        print(paste("No data available:", e$message))
+                        return(NULL)
                 })
         })
+        
         
         #Weights data
         hikp_w_data <- eventReactive(input$update_w, {
                 
                 req(input$countries_w, input$coicop_w)
-                filtered_data <- coicop_set_hierarchy[coicop_set_hierarchy$parent_code == input$coicop_w, ]
                 
-                result <- unique(filtered_data$coicop_code)
+                filtered_data <- coicop_set_hierarchy[coicop_set_hierarchy$parent_code == input$coicop_w, ]
+                coicops <- if (input$coicop_w == "CP00") "TOTAL" else input$coicop_w
+                print(filtered_data)
+                result <- unique(filtered_data$coicop18_code)
                 
                 result <- result[!is.na(result)]
                 
                 if (length(result) == 0) {
-                        result <- input$coicop_w
+                        result <- coicops
                 }
                 
-                data <- get_eurostat("prc_hicp_inw", filters = list(geo = input$countries_w,
+                data <- get_eurostat("prc_hicp_iw", filters = list(geo = input$countries_w,
                                                                     #time = c(years),
-                                                                    coicop =result),update_cache = TRUE)
+                                                                    coicop18 =result),update_cache = TRUE)
                 
                 new_plot_w_data <<- TRUE
                 
@@ -55,7 +161,7 @@ function(input, output, session) {
                 
                 # Group by "geo" & "coicop", find the first year with observations for every group
                 min_years <- data_no_na %>%
-                        group_by(geo, coicop) %>%
+                        group_by(geo, coicop18) %>%
                         summarise(min_year = min(time))
                 
                 # Find the first common year
@@ -66,10 +172,10 @@ function(input, output, session) {
                 
                 data <- filter(data, time >= max(first_non_na_year))
 
-                label_set<-select(coicop_set_hierarchy, coicop_code, code_label)
+                label_set<-select(coicop_set_hierarchy, coicop18_code, code_label)
                 
                 # Merged datasets based on ID-column
-                merged_data <- merge(data, label_set, by.x = "coicop", by.y = "coicop_code", all.x = TRUE)
+                merged_data <- merge(data, label_set, by.x = "coicop18", by.y = "coicop18_code", all.x = TRUE)
                 
                 return(merged_data)
         })
@@ -79,88 +185,107 @@ function(input, output, session) {
                 
                 req(input$countries_ar, input$coicop_ar)
                 filtered_data <- coicop_set_hierarchy[coicop_set_hierarchy$parent_code == input$coicop_ar, ]
-                
-                result <- unique(filtered_data$coicop_code)
+                coicops <- if (input$coicop_ar == "CP00") "TOTAL" else input$coicop_ar
+
+                result <- unique(filtered_data$coicop18_code)
                 
                 result <- result[!is.na(result)]
                 
                 if (input$contribution_type_ar=="selected higher aggregate"){
-                        full_coicop <- c(result, input$coicop_ar)
+                        full_coicop <- c(result, coicops)
                 }
 
-                if (input$contribution_type_ar=="all-items HICP" && input$coicop_ar !="CP00"){
-                        full_coicop <- c(result, input$coicop_ar,"CP00")
+                if (input$contribution_type_ar=="all-items HICP" && coicops !="TOTAL"){
+                        full_coicop <- c(result, coicops,"TOTAL")
        
                 }
                 
-                if (input$contribution_type_ar=="all-items HICP" && input$coicop_ar == "CP00"){
-                        full_coicop <- c(result, input$coicop_ar)
+                if (input$contribution_type_ar=="all-items HICP" && coicops == "TOTAL"){
+                        full_coicop <- c(result, coicops)
        
                 }
                 
                 
                 if (length(result) == 0) {
                         
-                                result <- input$coicop_ar
+                                result <- coicops
                                 full_coicop<-result
 
                 }
                 
                 #Get the index data
-                data_I <- get_eurostat("prc_hicp_midx", filters = list(geo = input$countries_ar,
+                data_I <- get_eurostat("prc_hicp_minr", filters = list(geo = input$countries_ar,
                                                                        #time = c(years),
-                                                                       unit="I15",
-                                                                       coicop =full_coicop),update_cache = TRUE)
-                
-                
+                                                                       unit="I25",
+                                                                       coicop18 =full_coicop),update_cache = TRUE)
                 
                 # Get weights
-                data_W <- get_eurostat("prc_hicp_inw", filters = list(geo = input$countries_ar,
+                data_W <- get_eurostat("prc_hicp_iw", filters = list(geo = input$countries_ar,
                                                                       #time = c(years),
-                                                                      coicop =full_coicop),update_cache = TRUE)
+                                                                      coicop18 =full_coicop),update_cache = TRUE)
+                data_W_check<<-data_W
+                result_check<<-result
+                
+                data_W<-select(data_W, -statinfo)
                 
                 new_plot_ar_data <<- TRUE
                 
                 # Index data for aggregates j
-                data_I_j <- filter(data_I, coicop %in% result)
+                data_I_j <- filter(data_I, coicop18 %in% result)
                 
                 data_I_j$year<-year(data_I_j$time)
                 data_I_j<-select(data_I_j,-freq, -unit)
                 data_I_j<-rename(data_I_j,IX_j=values)
                 
                 # Weights for j
-                data_W_j <- filter(data_W, coicop %in% result)
+                data_W_j <- filter(data_W, coicop18 %in% result)
+                
                 data_W_j$year<-year(data_W_j$time)
                 data_W_j<-select(data_W_j, -freq, -time)
                 data_W_j<-rename(data_W_j,WT_j_pre=values)
+
                 
                 # Weights for higher aggregate TOT
                 
-                data_W_TOT <- filter(data_W, coicop %in% input$coicop_ar)
+                inputcoicop_ar_check<<-coicops
+                data_W_TOT_check <<- filter(data_W, coicop18 %in% coicops)
+                data_W_TOT <- filter(data_W, coicop18 %in% coicops)
+                
+                
+                
+                
                 data_W_TOT$year<-year(data_W_TOT$time)
-                data_W_TOT<-select(data_W_TOT, -freq, -time, -coicop)
+                data_W_TOT<-select(data_W_TOT, -freq, -time, -coicop18)
                 data_W_TOT<-rename(data_W_TOT,WT_TOT=values)
-                data_W_jTOT <- left_join(data_W_j, data_W_TOT, by = c("year", "geo"))
+                
+                data_W_TOT_check<<-data_W_TOT
                 
                 #Calculate weight for j in selected higher aggregate
+                data_W_jTOT <- left_join(data_W_j, data_W_TOT, by = c("year", "geo"))
+                data_W_jTOT_check <<- left_join(data_W_j, data_W_TOT, by = c("year", "geo"))
+                
                 #...depending on the type of contribution selected
                 if (input$contribution_type_ar == "selected higher aggregate") {
-                        data_W_jTOT$WT_j<-data_W_jTOT$WT_j_pre/data_W_TOT$WT_TOT*1000
+                        
+                        data_W_jTOT <- data_W_jTOT %>%
+                                mutate(WT_j = WT_j_pre / WT_TOT * 1000)
                 } else if (input$contribution_type_ar == "all-items HICP") {
                         data_W_jTOT$WT_j<-data_W_jTOT$WT_j_pre
                 }
                 
+                
+                
                 data_W_jTOT<-select(data_W_jTOT,-WT_j_pre,-WT_TOT)
                 
-                result_j <- left_join(data_I_j, data_W_jTOT, by = c("year", "coicop", "geo"))
+                result_j <- left_join(data_I_j, data_W_jTOT, by = c("year", "coicop18", "geo"))
                 
                 # Annual rate for higher aggregate TOT
                 
                 
                 if (input$contribution_type_ar == "selected higher aggregate") {
-                        data_AR <- filter(data_I, coicop %in% input$coicop_ar)
+                        data_AR <- filter(data_I, coicop18 %in% coicops)
                 } else if (input$contribution_type_ar == "all-items HICP") {
-                        data_AR <- filter(data_I, coicop %in% "CP00")
+                        data_AR <- filter(data_I, coicop18 %in% "TOTAL")
                 }
                 
                 data_AR$year <- year(data_AR$time)
@@ -171,15 +296,15 @@ function(input, output, session) {
                 m_AR_ymin1<-select(m_AR_ymin1,-year, -unit,-time, -freq)
                 m_AR_ymin1<-rename(m_AR_ymin1,IX_j_m_ymin1=values,year=year_plus1)
                 
-                data_AR <- left_join(data_AR, m_AR_ymin1, by = c("year","month","geo","coicop"))
+                data_AR <- left_join(data_AR, m_AR_ymin1, by = c("year","month","geo","coicop18"))
                 data_AR$ann_rate_00<-data_AR$values/data_AR$IX_j_m_ymin1*100-100
                 data_AR<-select(data_AR, -freq,-unit,-values,-IX_j_m_ymin1)
 
                 # Indices for the higher aggregate TOT
                 
-                data_I_TOT <- filter(data_I, coicop %in% input$coicop_ar)
+                data_I_TOT <- filter(data_I, coicop18 %in% coicops)
                 
-                data_I_TOT<-select(data_I_TOT,-freq, -unit, -coicop)
+                data_I_TOT<-select(data_I_TOT,-freq, -unit, -coicop18)
                 data_I_TOT<-rename(data_I_TOT,IX_TOT=values)
                 
                 result_jTOT <- left_join(result_j, data_I_TOT, by = c("time", "geo"))
@@ -196,7 +321,7 @@ function(input, output, session) {
                 dec_data_ymin1<-select(dec_data_ymin1,-year, -time)
                 dec_data_ymin1<-rename(dec_data_ymin1,IX_j_12_ymin1=IX_j,WT_j_12_ymin1=WT_j,IX_TOT_12_ymin1=IX_TOT,year=year_plus1)
                 
-                result_jTOT2 <- left_join(result_jTOT, dec_data_ymin1, by = c("year", "geo","coicop"))
+                result_jTOT2 <- left_join(result_jTOT, dec_data_ymin1, by = c("year", "geo","coicop18"))
                 
                 #December y-2 data for TOT
                 
@@ -207,7 +332,7 @@ function(input, output, session) {
                 dec_data_ymin2<-select(dec_data_ymin2,-year, -time)
                 dec_data_ymin2<-rename(dec_data_ymin2,IX_j_12_ymin2=IX_j,WT_j_12_ymin2=WT_j,IX_TOT_12_ymin2=IX_TOT,year=year_plus2)
                 
-                result_jTOT2 <- left_join(result_jTOT2, dec_data_ymin2, by = c("year", "geo","coicop"))
+                result_jTOT2 <- left_join(result_jTOT2, dec_data_ymin2, by = c("year", "geo","coicop18"))
                 
                 #Data for current month m y-1 for TOT
                 
@@ -216,7 +341,7 @@ function(input, output, session) {
                 m_data_ymin1<-select(m_data_ymin1,-year, -time)
                 m_data_ymin1<-rename(m_data_ymin1,IX_j_m_ymin1=IX_j,WT_j_m_ymin1=WT_j,IX_TOT_m_ymin1=IX_TOT,year=year_plus1)
                 
-                result_jTOT2 <- left_join(result_jTOT2, m_data_ymin1, by = c("year", "month","geo","coicop"))
+                result_jTOT2 <- left_join(result_jTOT2, m_data_ymin1, by = c("year", "month","geo","coicop18"))
                 
                 numeric_vars <- c("IX_j", "WT_j", "IX_TOT", "IX_j_12_ymin1", "WT_j_12_ymin1", "IX_TOT_12_ymin1", 
                                   "IX_j_12_ymin2", "WT_j_12_ymin2", "IX_TOT_12_ymin2", "IX_j_m_ymin1", 
@@ -232,10 +357,9 @@ function(input, output, session) {
                                 )
                         )
                 
+                result_jTOT2 <- full_join(result_jTOT2, data_AR, by = c("year","time", "month", "geo", "coicop18"))
                 
-                result_jTOT2 <- full_join(result_jTOT2, data_AR, by = c("year","time", "month", "geo", "coicop"))
-                
-                data<-select(result_jTOT2,year,month,time, geo, coicop, ann_rate_00, Contr_j)
+                data<-select(result_jTOT2,year,month,time, geo, coicop18, ann_rate_00, Contr_j)
 
                 
                 data_no_na <- data %>%
@@ -253,208 +377,24 @@ function(input, output, session) {
                 
                 data <- filter(data, time >= max(first_non_na_year))
                 
-                label_set<-select(coicop_set_hierarchy, coicop_code, code_label)
+                #data <- data %>%
+                #        filter(!is.na(ann_rate_00) | !is.na(Contr_j))
                 
-                if (input$contribution_type_ar == "selected higher aggregate") {
-                        # Merged datasets based on ID-column
-                        merged_data <- merge(data, label_set, by.x = "coicop", by.y = "coicop_code", all.x = TRUE)
-                        merged_data <- merged_data %>%
-                                mutate(code_label = ifelse(coicop == input$coicop_ar, NA, code_label))
-                        
-                } else if (input$contribution_type_ar == "all-items HICP") {
-                        # Merged datasets based on ID-column
-                        merged_data <- merge(data, label_set, by.x = "coicop", by.y = "coicop_code", all.x = TRUE)
-                }
+                label_set<-select(coicop_set_hierarchy, coicop18_code, code_label)
                 
-                return(merged_data)
-        })
-        
-        #Monthly rates data
-        hikp_mr_data <- eventReactive(input$update_mr, {
-                
-                req(input$countries_mr, input$coicop_mr)
-                
-                filtered_data <- coicop_set_hierarchy[coicop_set_hierarchy$parent_code == input$coicop_mr, ]
-                
-                result <- unique(filtered_data$coicop_code)
-                
-                result <- result[!is.na(result)]
-                
-                
-                result <- unique(filtered_data$coicop_code)
-                
-                result <- result[!is.na(result)]
-                
-                if (input$contribution_type=="selected higher aggregate"){
-                        full_coicop <- c(result, input$coicop_mr)
-                }
-                
-                if (input$contribution_type=="all-items HICP" && input$coicop_mr !="CP00"){
-                        full_coicop <- c(result, input$coicop_mr,"CP00")
-                        
-                }
-                
-                if (input$contribution_type=="all-items HICP" && input$coicop_mr == "CP00"){
-                        full_coicop <- c(result, input$coicop_mr)
-                        
-                }
-                
-                
-                if (length(result) == 0) {
-                        
-                        result <- input$coicop_mr
-                        full_coicop<-result
-                        
-                }
-                
-                
-                #Get the index data
-                data_I <- get_eurostat("prc_hicp_midx", filters = list(geo = input$countries_mr,
-                                                                       #time = c(years),
-                                                                       unit="I15",
-                                                                       coicop =full_coicop),update_cache = TRUE)
-                
-                
-                
-                # Get weights
-                data_W <- get_eurostat("prc_hicp_inw", filters = list(geo = input$countries_mr,
-                                                                      #time = c(years),
-                                                                      coicop =full_coicop),update_cache = TRUE)
-                
-                new_plot_mr_data <<- TRUE
-                
-                # Index data for aggregates j -OK
-                data_I_j <- filter(data_I, coicop %in% result)
-                
-                data_I_j$year<-year(data_I_j$time)
-                data_I_j<-select(data_I_j,-freq, -unit)
-                data_I_j<-rename(data_I_j,IX_j=values)
-                
-                # Weights for j -OK
-                data_W_j <- filter(data_W, coicop %in% result)
-                
-                data_W_j$year<-year(data_W_j$time)
-                data_W_j<-select(data_W_j, -freq, -time)
-                data_W_j<-rename(data_W_j,WT_j_pre=values)
-                
-                # Weights for higher aggregate TOT -OK
-                
-                data_W_TOT <- filter(data_W, coicop %in% input$coicop_mr)
-                data_W_TOT$year<-year(data_W_TOT$time)
-                data_W_TOT<-select(data_W_TOT, -freq, -time, -coicop)
-                data_W_TOT<-rename(data_W_TOT,WT_TOT=values)
-                
-                #Calculate weight for j in selected higher aggregate
-                data_W_jTOT <- left_join(data_W_j, data_W_TOT, by = c("year", "geo"))
-                
-                #...depending on the type of contribution selected
-                if (input$contribution_type == "selected higher aggregate") {
-                        data_W_jTOT$WT_j<-data_W_jTOT$WT_j_pre/data_W_TOT$WT_TOT*1000
-                } else if (input$contribution_type == "all-items HICP") {
-                        data_W_jTOT$WT_j<-data_W_jTOT$WT_j_pre
-                }
-                
-                data_W_jTOT<-select(data_W_jTOT,-WT_j_pre,-WT_TOT)
-                
-                result_j <- left_join(data_I_j, data_W_jTOT, by = c("year", "coicop", "geo"))
-                
-                # Monthly rate for higher aggregate TOT
-                
-                if (input$contribution_type == "selected higher aggregate") {
-                        data_MR <- filter(data_I, coicop %in% input$coicop_mr)
-                } else if (input$contribution_type == "all-items HICP") {
-                        data_MR <- filter(data_I, coicop %in% "CP00")
-                }
-                
-                data_MR$year <- year(data_MR$time)
-                data_MR$month <- month(data_MR$time)
-                
-                #Find the monthly rate of change for total index
-                m_MR_mmin1 <- data_MR
-                
-                m_MR_mmin1$new_year <- ifelse(m_MR_mmin1$month == 12, m_MR_mmin1$year + 1, m_MR_mmin1$year)
-                m_MR_mmin1$new_month <- ifelse(m_MR_mmin1$month == 12, 1, m_MR_mmin1$month %% 12 + 1)
-            
-                m_MR_mmin1<-select(m_MR_mmin1,-year,-month, -unit,-time, -freq)
-                m_MR_mmin1<-rename(m_MR_mmin1,IX_j_m_mmin1=values,year=new_year,month=new_month)
-                
-                data_MR <- left_join(data_MR, m_MR_mmin1, by = c("year","month","geo","coicop"))
-                data_MR$m_rate_00<-data_MR$values/data_MR$IX_j_m_mmin1*100-100
-                
-                data_MR<-select(data_MR, -freq,-unit,-values,-IX_j_m_mmin1)
-                
-                # Indices for the higher aggregate TOT
-                
-                data_I_TOT <- filter(data_I, coicop %in% input$coicop_mr)
-                data_I_TOT<-select(data_I_TOT,-freq, -unit, -coicop)
-                data_I_TOT<-rename(data_I_TOT,IX_TOT=values)
-                result_jTOT <- left_join(result_j, data_I_TOT, by = c("time", "geo"))
-                result_jTOT$year <- year(result_jTOT$time)
-                result_jTOT$month <- month(result_jTOT$time)
-                
-                #Previous month indices
-                
-                data_mmin1 <- result_jTOT
-                
-                data_mmin1$new_year <- ifelse(data_mmin1$month == 12, data_mmin1$year + 1, data_mmin1$year)
-                data_mmin1$new_month <- ifelse(data_mmin1$month == 12, 1, data_mmin1$month %% 12 + 1)
-                data_mmin1<-select(data_mmin1,-year,-month, -time, -WT_j)
-                data_mmin1<-rename(data_mmin1,IX_TOT_m_mmin1=IX_TOT, IX_j_m_mmin1=IX_j,year=new_year,month=new_month)
-                result_jTOT2 <- left_join(result_jTOT, data_mmin1, by = c("year","month", "geo","coicop"))
-               
-                
-                #Contribution to monthly rate of change
-                numeric_vars <- c("IX_j", "WT_j", "IX_TOT_m_mmin1", "IX_j_m_mmin1")
-                
-                result_jTOT2 <- result_jTOT2 %>%
+                # Merged datasets based on ID-column
+                merged_data <- merge(data, label_set, by.x = "coicop18", by.y = "coicop18_code", all.x = TRUE)
+                merged_data <- merged_data %>%
                         mutate(
-                                Contr_j = if_else(
-                                        rowSums(is.na(across(all_of(numeric_vars)))) > 0,
+                                code_label = ifelse(coicop18 == coicops, NA, code_label),
+                                code_label_wrapped = ifelse(
+                                        is.na(code_label),
                                         NA,
-                                        (100 * (WT_j/1000*(IX_j - IX_j_m_mmin1))/IX_TOT_m_mmin1)
+                                        wrap_legend(code_label, width = 45)
                                 )
                         )
                 
-                result_jTOT2 <- full_join(result_jTOT2, data_MR, by = c("year","time", "month", "geo", "coicop"))
-                
-                data<-select(result_jTOT2,year,month,time, geo, coicop, m_rate_00, Contr_j)
-             
-                
-                data_no_na <- data %>%
-                        filter(is.numeric(Contr_j) | is.numeric(m_rate_00))
-                
-                min_years <- data_no_na %>%
-                        group_by(geo) %>%
-                        summarise(min_year = min(time))
-                
-                #Find the first common year
-                first_non_na_year <- min_years %>%
-                        summarise(first_common_year = max(min_year)) %>%
-                        pull(max(first_common_year))
-                
-                
-                data <- filter(data, time >= max(first_non_na_year))
-                
-                #data <- data %>%
-                #        filter(!is.na(m_rate_00) | !is.na(Contr_j))
-               
-                label_set<-select(coicop_set_hierarchy, coicop_code, code_label)
-                
-                # Merged datasets based on ID-column
-                #...depending on contribution type selected
-                if (input$contribution_type == "selected higher aggregate") {
-                        # Merged datasets based on ID-column
-                        merged_data <- merge(data, label_set, by.x = "coicop", by.y = "coicop_code", all.x = TRUE)
-                        merged_data <- merged_data %>%
-                                mutate(code_label = ifelse(coicop == input$coicop_mr, NA, code_label))
-                        
-                } else if (input$contribution_type == "all-items HICP") {
-                        # Merged datasets based on ID-column
-                        merged_data <- merge(data, label_set, by.x = "coicop", by.y = "coicop_code", all.x = TRUE)
-                }
-                
                 return(merged_data)
-                
         })
         
         #Seasonality data
@@ -462,11 +402,15 @@ function(input, output, session) {
                 
                 req(input$countries_se, input$coicop_se)
                 
+                coicops <- if (input$coicop_se == "CP00") "TOTAL" else input$coicop_se
+                
                 #Get the index data
-                data_I <- get_eurostat("prc_hicp_midx", filters = list(geo = input$countries_se,
+                data_I <- get_eurostat("prc_hicp_minr", filters = list(geo = input$countries_se,
                                                                        #time = c(years),
-                                                                       unit="I15",
-                                                                       coicop =input$coicop_se),update_cache = TRUE)
+                                                                       unit="I25",
+                                                                       coicop18 =coicops),update_cache = TRUE)
+                
+                
                 
                 
                 new_plot_se_data <<- TRUE
@@ -490,7 +434,7 @@ function(input, output, session) {
                 dec_data_ymin1<-select(dec_data_ymin1,-year, -time)
                 dec_data_ymin1<-rename(dec_data_ymin1,IX_j_12_ymin1=IX_j,year=year_plus1)
                 
-                result_j2 <- left_join(result_j, dec_data_ymin1, by = c("year", "geo","coicop"))
+                result_j2 <- left_join(result_j, dec_data_ymin1, by = c("year", "geo","coicop18"))
                 result_j2$index_dec_prv_yr<-result_j2$IX_j/result_j2$IX_j_12_ymin1*100
                 data<-result_j2
                 
@@ -512,14 +456,234 @@ function(input, output, session) {
                 data <- data %>%
                         filter(!is.na(index_dec_prv_yr))
                 
-                label_set<-select(coicop_set_hierarchy, coicop_code, code_label)
+                label_set<-select(coicop_set_hierarchy, coicop18_code, code_label)
                 
                 # Merged datasets based on ID-column
-                merged_data <- merge(data, label_set, by.x = "coicop", by.y = "coicop_code", all.x = TRUE)
+                merged_data <- merge(data, label_set, by.x = "coicop18", by.y = "coicop18_code", all.x = TRUE)
                 merged_data <- merged_data %>%
-                        mutate(code_label = ifelse(coicop == input$coicop_se, NA, code_label))
+                        mutate(code_label = ifelse(coicop18 == coicops, NA, code_label))
                 
                 return(merged_data)
+        })
+        
+        #Monthly rates data
+        hikp_mr_data <- eventReactive(input$update_mr, {
+                
+                req(input$countries_mr, input$coicop_mr)
+                
+                filtered_data <- coicop_set_hierarchy[coicop_set_hierarchy$parent_code == input$coicop_mr, ]
+                
+                coicops <- if (input$coicop_mr == "CP00") "TOTAL" else input$coicop_mr
+                print(coicops)
+                
+                result <- unique(filtered_data$coicop18_code)
+                                
+                result <- result[!is.na(result)]
+                print(result)
+                
+                if (input$contribution_type_mr=="selected higher aggregate"){
+                        full_coicop <- c(result, coicops)
+                }
+                
+                if (input$contribution_type_mr=="all-items HICP" && coicops !="TOTAL"){
+                        full_coicop <- c(result, coicops,"TOTAL")
+                        
+                }
+                
+                if (input$contribution_type_mr=="all-items HICP" && coicops == "TOTAL"){
+                        full_coicop <- c(result, coicops)
+                        
+                }
+                
+                
+                if (length(result) == 0) {
+                        
+                        result <- coicops
+                        full_coicop<-result
+                        
+                }
+                
+                
+                #Get the index data
+                data_I <- get_eurostat("prc_hicp_minr", filters = list(geo = input$countries_mr,
+                                                                       #time = c(years),
+                                                                       unit="I25",
+                                                                       coicop18 =full_coicop),update_cache = TRUE)
+                
+                # Get weights
+                data_W <- get_eurostat("prc_hicp_iw", filters = list(geo = input$countries_mr,
+                                                                      #time = c(years),
+                                                                      coicop18 =full_coicop),update_cache = TRUE)
+                
+                new_plot_mr_data <<- TRUE
+                
+                # Index data for aggregates j 
+                data_I_j <- filter(data_I, coicop18 %in% result)
+                
+               
+                data_I_j <- data_I_j %>%
+                        mutate(
+                                year = year(time),
+                                month = month(time)
+                        ) %>%
+                        select(-any_of(c("freq", "unit"))) %>%
+                        rename(IX_j = values)
+                
+               
+                # Weights for j -OK
+                data_W_j <- data_W %>%
+                        filter(coicop18 %in% result) %>%
+                        mutate(year = year(time)) %>%
+                        select(-any_of(c("freq", "time"))) %>%
+                        rename(WT_j_pre = values)
+                
+                # Weights for higher aggregate TOT -OK
+                
+                data_W_TOT <- data_W %>%
+                        filter(coicop18 %in% coicops) %>%
+                        mutate(year = year(time)) %>%
+                        select(-any_of(c("freq", "time", "coicop18"))) %>%
+                        rename(WT_TOT = values)
+                
+                #Calculate weight for j in selected higher aggregate
+                data_W_jTOT <- left_join(data_W_j, data_W_TOT, by = c("year", "geo"))
+                
+                #...depending on the type of contribution selected
+                if (input$contribution_type_mr == "selected higher aggregate") {
+                        data_W_jTOT <- data_W_jTOT %>%
+                                mutate(WT_j = WT_j_pre / WT_TOT * 1000)
+                } else if (input$contribution_type_mr == "all-items HICP") {
+                        data_W_jTOT$WT_j<-data_W_jTOT$WT_j_pre
+                }
+                
+                
+                data_W_jTOT<-select(data_W_jTOT,-WT_j_pre,-WT_TOT)
+                
+                result_j <- left_join(data_I_j, data_W_jTOT, by = c("year", "coicop18", "geo"))
+                
+                # Monthly rate for higher aggregate TOT
+                
+                if (input$contribution_type_mr == "selected higher aggregate") {
+                        data_MR <- filter(data_I, coicop18 %in% coicops)
+                } else if (input$contribution_type_mr == "all-items HICP") {
+                        data_MR <- filter(data_I, coicop18 %in% "CP00")
+                }
+                
+                data_MR$year <- year(data_MR$time)
+                data_MR$month <- month(data_MR$time)
+                
+                #Find the monthly rate of change for total index
+                m_MR_mmin1 <- data_MR
+                
+                m_MR_mmin1$new_year <- ifelse(m_MR_mmin1$month == 12, m_MR_mmin1$year + 1, m_MR_mmin1$year)
+                m_MR_mmin1$new_month <- ifelse(m_MR_mmin1$month == 12, 1, m_MR_mmin1$month %% 12 + 1)
+            
+                m_MR_mmin1<-select(m_MR_mmin1,-year,-month, -unit,-time, -freq)
+                m_MR_mmin1<-rename(m_MR_mmin1,IX_j_m_mmin1=values,year=new_year,month=new_month)
+                
+                data_MR <- left_join(data_MR, m_MR_mmin1, by = c("year","month","geo","coicop18"))
+                data_MR$m_rate_00<-data_MR$values/data_MR$IX_j_m_mmin1*100-100
+                
+                data_MR<-select(data_MR, -freq,-unit,-values,-IX_j_m_mmin1)
+                
+                # Indices for the higher aggregate TOT
+                
+                data_I_TOT <- filter(data_I, coicop18 %in% coicops)
+                
+                data_I_TOT <- data_I_TOT %>%
+                        mutate(
+                                year = year(time),
+                                month = month(time)
+                        ) %>%
+                        select(-any_of(c("freq", "unit", "coicop18"))) %>%
+                        rename(IX_TOT = values)
+                
+                #Fixing
+                result_jTOT <- left_join(result_j, data_I_TOT, by = c("time", "geo"))
+                result_jTOT$year <- year(result_jTOT$time)
+                result_jTOT$month <- month(result_jTOT$time)
+                
+                
+                #Previous month indices
+                
+                data_mmin1 <- result_jTOT
+                
+                data_mmin1$new_year <- ifelse(data_mmin1$month == 12, data_mmin1$year + 1, data_mmin1$year)
+                data_mmin1$new_month <- ifelse(data_mmin1$month == 12, 1, data_mmin1$month %% 12 + 1)
+                data_mmin1<-select(data_mmin1,-year,-month, -time, -WT_j)
+                data_mmin1<-rename(data_mmin1,IX_TOT_m_mmin1=IX_TOT, IX_j_m_mmin1=IX_j,year=new_year,month=new_month)
+                result_jTOT2 <- left_join(result_jTOT, data_mmin1, by = c("year","month", "geo","coicop18"))
+                
+                # Compute contributions to the monthly rate of change following the HICP methodology:
+                # 1) Update weights to the previous month (m-1) by price-updating base weights:
+                #    weight_j_mmin1 = w_j * (I_j^{m-1} / I_TOT^{m-1})
+                # 2) Calculate the monthly rate of change for each sub-index:
+                #    mr_j = (I_j^{m} / I_j^{m-1} - 1) * 100
+                # 3) Derive contributions as the product of the price-updated weight and the sub-index rate:
+                #    Contr_j = mr_j * weight_j_mmin1
+                # Missing values are propagated to ensure contributions are only computed when all required inputs are available.
+                
+                #Contribution to monthly rate of change
+                result_jTOT2 <- result_jTOT2 %>%
+                        mutate(
+                                weight_j_mmin1 = if_else(
+                                        is.na(WT_j) | is.na(IX_j_m_mmin1) | is.na(IX_TOT_m_mmin1),
+                                        NA_real_,
+                                        (WT_j / 1000) * (IX_j_m_mmin1 / IX_TOT_m_mmin1)
+                                ),
+                                
+                                mr_j = if_else(
+                                        is.na(IX_j) | is.na(IX_j_m_mmin1),
+                                        NA_real_,
+                                        (IX_j / IX_j_m_mmin1 - 1) * 100
+                                ),
+                                
+                                Contr_j = mr_j * weight_j_mmin1
+                        )
+               
+                result_jTOT2 <- full_join(result_jTOT2, data_MR, by = c("year","time", "month", "geo", "coicop18"))
+                
+
+                
+                
+                data<-select(result_jTOT2,year,month,time, geo, coicop18, m_rate_00, Contr_j)
+             
+                
+                data_no_na <- data %>%
+                        filter(is.numeric(Contr_j) | is.numeric(m_rate_00))
+                
+                min_years <- data_no_na %>%
+                        group_by(geo) %>%
+                        summarise(min_year = min(time))
+                
+                #Find the first common year
+                first_non_na_year <- min_years %>%
+                        summarise(first_common_year = max(min_year)) %>%
+                        pull(max(first_common_year))
+                
+                
+                data <- filter(data, time >= max(first_non_na_year))
+                
+                data <- data %>%
+                        filter(!is.na(m_rate_00) | !is.na(Contr_j))
+               
+                label_set<-select(coicop_set_hierarchy, coicop18_code, code_label)
+                
+                # Merged datasets based on ID-column
+                merged_data <- merge(data, label_set, by.x = "coicop18", by.y = "coicop18_code", all.x = TRUE)
+                
+                merged_data <- merged_data %>%
+                        mutate(
+                                code_label = ifelse(coicop18 == coicops, NA, code_label),
+                                code_label_wrapped = ifelse(
+                                        is.na(code_label),
+                                        NA,
+                                        wrap_legend(code_label, width = 45)
+                                )
+                        )
+                
+                return(merged_data)
+                
         })
         
         selected_data <- reactive({
@@ -532,14 +696,14 @@ function(input, output, session) {
                 data_no_na <- data %>%
                         filter(!is.na(values), substr(time, 1, 3) == "Jan" | substr(time, 1, 3) == "Dec")
                 
-                # Group by "geo" and "coicop" and find the earliest common year with index values
+                # Group by "geo" and "coicop18" and find the earliest common year with index values
                 max_years <- data_no_na %>%
-                        group_by(geo, coicop) %>%
+                        group_by(geo, coicop18) %>%
                         summarise(max_year = max(time))
                 
-                # Group by "geo" & "coicop", find the first year with observations for every group
+                # Group by "geo" & "coicop18", find the first year with observations for every group
                 min_years <- data_no_na %>%
-                        group_by(geo, coicop) %>%
+                        group_by(geo, coicop18) %>%
                         summarise(min_year = min(time))
                 
                 # Find the first common year
@@ -574,6 +738,37 @@ function(input, output, session) {
         observe({
                 updateSelectInput(session, "select_years", choices = selected_data())
                 req(input$countries, input$coicops)
+        })
+        
+        #When both HICP and HICP-CT are selected, only one COICOP aggregate can be shown.
+        observeEvent(input$index_measure, {
+                req(input$index_measure)
+                
+                if (length(input$index_measure) == 2 && length(input$coicops) > 1) {
+                        updateSelectInput(
+                                session,
+                                "coicops",
+                                selected = input$coicops[1]
+                        )
+                        
+                        showNotification(
+                                "When both HICP and HICP-CT are selected, only one COICOP aggregate can be shown.",
+                                type = "message"
+                        )
+                }
+        })
+        
+        #When both HICP and HICP-CT are selected, only one COICOP aggregate can be shown (also after first selection).
+        observeEvent(input$coicops, {
+                req(input$index_measure)
+                
+                if (length(input$index_measure) == 2 && length(input$coicops) > 1) {
+                        updateSelectInput(
+                                session,
+                                "coicops",
+                                selected = input$coicops[1]
+                        )
+                }
         })
         
         selected_w_data <- reactive({
@@ -615,106 +810,181 @@ function(input, output, session) {
         })
         
         observe({
-                req(hikp_w_data())
+                req(hikp_w_data(), input$weights_view)
                 year_choices <- selected_w_data()
                 
-                max_year<-as.numeric(max(year_choices))
-                min_year<-as.numeric(min(year_choices))
-                updateSliderInput(session, "range_slider_w", min = min_year, max = max_year,step=1, value = c(max(c(max_year-5, min_year)), max_year))
-                req(hikp_w_data, input$update_w, input$countries_w, input$coicop_w)
+                max_year <- as.numeric(max(year_choices))
+                min_year <- as.numeric(min(year_choices))
+                
+                slider_value <- if (input$weights_view == "country") {
+                        c(max(max_year - 5, min_year), max_year)
+                } else {
+                        c(max_year, max_year)
+                }
+                
+                updateSliderInput(
+                        session,
+                        "range_slider_w",
+                        min = min_year,
+                        max = max_year,
+                        step = 1,
+                        value = slider_value
+                )
+                
+                req(input$update_w, input$countries_w, input$coicop_w)
         })
         
         selected_ar_data <- reactive({
-                req(hikp_ar_data())
-                data <- hikp_ar_data()
-                data$time <- as.yearmon(data$time)
-                data <- data[data$geo %in% input$countries_ar, ]
+                req(hikp_ar_data(), input$ar_view)
                 
-                # Remove NAs in column values
+                data <- hikp_ar_data() %>%
+                        mutate(time = as.yearmon(time)) %>%
+                        filter(geo %in% input$countries_ar)
+                
                 data_no_na <- data %>%
-                        filter(is.numeric(Contr_j) | is.numeric(ann_rate_00), month == 1 | month == 12)
+                        filter(!is.na(Contr_j) | !is.na(ann_rate_00))
                 
-                max_years <- data_no_na %>%
+                min_times <- data_no_na %>%
                         group_by(geo) %>%
-                        summarise(max_year = max(time,na.rm=TRUE))
+                        summarise(min_time = min(time, na.rm = TRUE), .groups = "drop")
                 
-                min_years <- data_no_na %>%
+                max_times <- data_no_na %>%
                         group_by(geo) %>%
-                        summarise(min_year = min(time))
+                        summarise(max_time = max(time, na.rm = TRUE), .groups = "drop")
                 
+                first_common_time <- max(min_times$min_time)
+                last_common_time  <- min(max_times$max_time)
                 
-                # Find the first common year
-                first_non_na_year <- min_years %>%
-                        summarise(first_common_year = max(min_year)) %>%
-                        pull(max(first_common_year))
+                available_times <- data %>%
+                        filter(time >= first_common_time,
+                               time <= last_common_time) %>%
+                        distinct(time) %>%
+                        arrange(desc(time)) %>%
+                        pull(time)
                 
-                # Find the last common year
-                last_non_na_year <- max_years %>%
-                        summarise(last_common_year = min(max_year)) %>%
-                        pull(min(last_common_year))
+                if (input$ar_view == "period") {
+                        period_list <- format(available_times, "%Y %B")
+                        
+                        return(list(
+                                choices = period_list,
+                                selected = period_list[1]
+                        ))
+                }
                 
-                # Common filtering based on the first and last common years
+                year_list <- unique(format(available_times, "%Y"))
                 
-                data <- filter(data, time >= max(first_non_na_year) & time <= min(last_non_na_year))
-                year_list<-unique(format(data$time, "%Y"))
-                return(year_list)
-        
+                return(list(
+                        choices = year_list,
+                        selected = NULL
+                ))
         })
+        
         
         observe({
-                req(hikp_ar_data())
-                year_choices <- selected_ar_data()
+                req(hikp_ar_data(), input$ar_view)
                 
-                max_year<-as.numeric(max(year_choices))
-                min_year<-as.numeric(min(year_choices))
-                updateSliderInput(session, "range_slider", min = min_year, max = max_year,step=1, value = c(max(c(max_year-2, min_year)), max_year))
-                req(hikp_ar_data, input$update_ar, input$countries_ar, input$coicop_ar)
+                ar_choices <- selected_ar_data()
+                
+                if (input$ar_view == "country") {
+                        year_choices <- ar_choices$choices
+                        
+                        max_year <- as.numeric(max(year_choices))
+                        min_year <- as.numeric(min(year_choices))
+                        
+                        updateSliderInput(
+                                session,
+                                "range_slider",
+                                min = min_year,
+                                max = max_year,
+                                step = 1,
+                                value = c(max(max_year - 2, min_year), max_year)
+                        )
+                }
+                
+                if (input$ar_view == "period") {
+                        updateSelectInput(
+                                session,
+                                "select_period_ar",
+                                choices = ar_choices$choices,
+                                selected = ar_choices$selected
+                        )
+                }
         })
+        
+        
         
         selected_mr_data <- reactive({
                 req(hikp_mr_data())
-                data <- hikp_mr_data()
-                data$time <- as.yearmon(data$time)
-                data <- data[data$geo %in% input$countries_mr, ]
                 
-                # Remove NAs in column values
+                data <- hikp_mr_data() %>%
+                        mutate(time = as.yearmon(time)) %>%
+                        filter(geo %in% input$countries_mr)
                 
                 data_no_na <- data %>%
                         filter(!is.na(Contr_j) | !is.na(m_rate_00))
                 
-                max_years <- data_no_na %>%
-                        group_by(geo) %>%
-                        summarise(max_year = max(time,na.rm=TRUE))
-                
                 min_years <- data_no_na %>%
                         group_by(geo) %>%
-                        summarise(min_year = min(time))
+                        summarise(min_time = min(time, na.rm = TRUE), .groups = "drop")
                 
+                max_years <- data_no_na %>%
+                        group_by(geo) %>%
+                        summarise(max_time = max(time, na.rm = TRUE), .groups = "drop")
                 
-                # Find the first common year
-                first_non_na_year <- min_years %>%
-                        summarise(first_common_year = max(min_year)) %>%
-                        pull(max(first_common_year))
+                first_common_time <- max(min_years$min_time)
+                last_common_time  <- min(max_years$max_time)
                 
-                # Find the last common year
-                last_non_na_year <- max_years %>%
-                        summarise(last_common_year = min(max_year)) %>%
-                        pull(min(last_common_year))
+                available_times <- data %>%
+                        filter(time >= first_common_time,
+                               time <= last_common_time) %>%
+                        distinct(time) %>%
+                        arrange(desc(time)) %>%
+                        pull(time)
                 
-                # Common filtering based on the first and last common years
+                period_list <- format(available_times, "%Y %B")
                 
-                data <- filter(data, time >= max(first_non_na_year) & time <= min(last_non_na_year))
-                period_list<-unique(format(rev(data$time), "%Y %B"))
+                latest_time <- max(available_times)
                 
-                return(period_list)
+                if (input$mr_view == "period") {
+                        # Graph by period: only last month
+                        default_periods <- format(latest_time, "%Y %B")
+                        
+                } else {
+                        # Graph by country: same month last 5 years
+                        
+                        wanted_times <- latest_time - 0:4
+                        
+                        default_periods <- format(
+                                available_times[available_times %in% wanted_times],
+                                "%Y %B"
+                        )
+                        
+                        if (length(default_periods) < 5) {
+                                default_periods <- format(latest_time, "%Y %B")
+                        }
+                }
                 
+                list(
+                        choices = period_list,
+                        selected = default_periods
+                )
         })
         
         # Update selectInput to show the list of available periods (monthly rate)
         observe({
-                updateSelectInput(session, "select_period_mr", choices = selected_mr_data(),selected = selected_mr_data()[1])
-                req(input$countries_mr, input$coicop_mr)
+                req(input$countries_mr, input$coicop_mr, input$mr_view)
+                
+                periods <- selected_mr_data()
+                
+                updateSelectInput(
+                        session,
+                        "select_period_mr",
+                        choices = periods$choices,
+                        selected = periods$selected
+                )
         })
+        
+        
         
         selected_se_data <- reactive({
                 req(hikp_se_data())
@@ -756,7 +1026,8 @@ function(input, output, session) {
                 
         })
         
-        # Update selectInput to show the list of available periods (monthly rate)
+        
+        # Update selectInput to show the list of available periods (seasonality)
         observe({
                 updateSelectInput(session, "select_years_se", choices = selected_se_data(),selected = selected_se_data()[1])
                 req(input$countries_se, input$coicop_se)
@@ -774,16 +1045,20 @@ function(input, output, session) {
                 if (input$period_type == "Full year") {
                         avg_refyear <- data %>%
                                 filter(as.numeric(format(time, "%Y")) == as.numeric(input$select_years)) %>%
-                                group_by(coicop, geo) %>%
-                                summarise(mean_values = mean(values))
+                                group_by(coicop18, geo, measure) %>%
+                                summarise(mean_values = mean(values, na.rm = TRUE), .groups = "drop")
                 } else if (input$period_type == "Month") {
                         avg_refyear <- data %>%
                                 filter(as.character(format(time, "%Y %B")) == input$select_years) %>%
-                                group_by(coicop, geo) %>%
-                                summarise(mean_values = mean(values))
+                                group_by(coicop18, geo, measure) %>%
+                                summarise(mean_values = mean(values, na.rm = TRUE), .groups = "drop")
                 }
 
-                rebased_data <-left_join(hikp_data(),avg_refyear, by = c("coicop", "geo"))
+                rebased_data <- left_join(
+                        hikp_data(),
+                        avg_refyear,
+                        by = c("coicop18", "geo", "measure")
+                )
                 
                 rebased_data$newbase <- ifelse(!is.na(rebased_data$values) & !is.na(rebased_data$mean_values),
                                         rebased_data$values/rebased_data$mean_values*100,NA)
@@ -811,120 +1086,333 @@ function(input, output, session) {
         # Create the plot (weights)
         observeEvent(input$update_w, {
                 output$plot_w <- renderPlotly({
-                        req(hikp_w_data())
+                        req(hikp_w_data(), input$weights_view)
                         data <- hikp_w_data()
                         
                         # Filter data based on selected years
-                        time_filtered_data <- data[as.numeric(format(data$time, "%Y")) >= input$range_slider_w[1] & as.numeric(format(data$time, "%Y")) <= input$range_slider_w[2], ]
+                        time_filtered_data <- data[
+                                as.numeric(format(data$time, "%Y")) >= input$range_slider_w[1] &
+                                        as.numeric(format(data$time, "%Y")) <= input$range_slider_w[2], ]
                         
-                        
-                        # Determine common max and min on y-axis
-                        weight_by_geo <- time_filtered_data %>%
-                                group_by(geo, time) %>%
-                                summarise(sum = sum(values, na.rm = TRUE))
-                        
-                        max_weight <-max(weight_by_geo$sum)
-                        
-                        if(is.null(input$coicop_w)==FALSE && is.null(input$countries_w)==FALSE){
+                        if (is.null(input$coicop_w) == FALSE && is.null(input$countries_w) == FALSE) {
                                 
-                                #Create list to store subplots
                                 subplots <- list()
                                 
-                                # Loop through each unique value in geo "geo"
-                                count <- 0
-                                for (geo_value in unique(time_filtered_data$geo)) {
+                                # ---------------------------------------------------
+                                # 1) ONE GRAPH PER COUNTRY
+                                # ---------------------------------------------------
+                                if (input$weights_view == "country") {
                                         
-                                        # Filter dataset for the current geo value
-                                        count <- count + 1
-                                        filtered_data <- time_filtered_data[time_filtered_data$geo == geo_value, ]
+                                        weight_by_geo <- time_filtered_data %>%
+                                                group_by(geo, time) %>%
+                                                summarise(sum = sum(values, na.rm = TRUE), .groups = "drop")
                                         
-                                        filtered_data$values <- ifelse(is.na(filtered_data$values), 0, filtered_data$values)
+                                        max_weight <- max(weight_by_geo$sum, na.rm = TRUE)
                                         
-                                        # Check if all values in "values" are 0
-                                        if(all(filtered_data$values == 0)) {
+                                        count <- 0
+                                        for (geo_value in unique(time_filtered_data$geo)) {
                                                 
-                                                # If all values are 0, add text "Data unavailable" in the middle
-                                                text_annotation <- list(
-                                                        x = 0.25,
-                                                        y = 0.75,
-                                                        xref = "paper",
-                                                        yref = "paper",
-                                                        text = "Data unavailable",
-                                                        showarrow = FALSE,
-                                                        font = list(size = 14, color = "black")
-                                                )
+                                                count <- count + 1
+                                                filtered_data <- time_filtered_data[time_filtered_data$geo == geo_value, ]
+                                                filtered_data$values <- ifelse(is.na(filtered_data$values), 0, filtered_data$values)
                                                 
-                                                subpl <- plot_ly(filtered_data,x = ~time, y = ~values, showlegend = FALSE,color = ~code_label,legendgroup = ~code_label)  # Empty subplot
-                                                subpl <- subpl %>% layout(barmode = 'stack', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE))
-                                                
-                                                
-                                                # Add axis labels
-                                                subpl <- subpl %>% layout(xaxis = list(title = ""), yaxis = list(title = "Weight, per mille"))
-                                                subpl <- subpl %>% layout(annotations = list(text_annotation))
-                                        } else {
-                                                # Create a stacked bar chart for current country
-                                                if(count == 1) {
-                                                        subpl <- plot_ly(filtered_data, x = ~time, y = ~values, color = ~code_label, type = "bar", legendgroup = ~code_label)
+                                                if (all(filtered_data$values == 0)) {
+                                                        
+                                                        text_annotation <- list(
+                                                                x = 0.25,
+                                                                y = 0.75,
+                                                                xref = "paper",
+                                                                yref = "paper",
+                                                                text = "Data unavailable",
+                                                                showarrow = FALSE,
+                                                                font = list(size = 14, color = "black")
+                                                        )
+                                                        
+                                                        subpl <- plot_ly(
+                                                                filtered_data,
+                                                                x = ~time,
+                                                                y = ~values,
+                                                                showlegend = FALSE,
+                                                                color = ~code_label,
+                                                                legendgroup = ~code_label
+                                                        )
+                                                        
+                                                        subpl <- subpl %>%
+                                                                layout(
+                                                                        barmode = 'stack',
+                                                                        annotations = list(
+                                                                                text = geo_value, xref = "paper", yref = "paper",
+                                                                                yanchor = "bottom", xanchor = "center",
+                                                                                align = "center", x = 0.5, y = 0.95, showarrow = FALSE
+                                                                        ),
+                                                                        xaxis = list(title = ""),
+                                                                        yaxis = list(title = "Weight, per mille")
+                                                                ) %>%
+                                                                layout(annotations = list(text_annotation))
+                                                        
                                                 } else {
-                                                        subpl <- plot_ly(filtered_data, x = ~time, y = ~values, color = ~code_label, type = "bar", legendgroup = ~code_label, showlegend = FALSE)
+                                                        
+                                                        if (count == 1) {
+                                                                subpl <- plot_ly(
+                                                                        filtered_data,
+                                                                        x = ~time,
+                                                                        y = ~values,
+                                                                        color = ~code_label,
+                                                                        type = "bar",
+                                                                        legendgroup = ~code_label
+                                                                )
+                                                        } else {
+                                                                subpl <- plot_ly(
+                                                                        filtered_data,
+                                                                        x = ~time,
+                                                                        y = ~values,
+                                                                        color = ~code_label,
+                                                                        type = "bar",
+                                                                        legendgroup = ~code_label,
+                                                                        showlegend = FALSE
+                                                                )
+                                                        }
+                                                        
+                                                        subpl <- subpl %>%
+                                                                layout(
+                                                                        yaxis = list(range = c(0, max_weight * 1.05), title = "Weight, per mille"),
+                                                                        xaxis = list(title = ""),
+                                                                        barmode = 'stack',
+                                                                        annotations = list(
+                                                                                text = geo_value, xref = "paper", yref = "paper",
+                                                                                yanchor = "bottom", xanchor = "center",
+                                                                                align = "center", x = 0.5, y = 0.95, showarrow = FALSE
+                                                                        )
+                                                                )
                                                 }
                                                 
-                                                subpl <- subpl %>% layout(yaxis = list(range = c(0, max_weight*1.05)),barmode = 'stack', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE))
-                                                # Add axis labels
-                                                subpl <- subpl %>% layout(xaxis = list(title = ""), yaxis = list(title = "Weight, per mille"))
+                                                subplots[[geo_value]] <- subpl
                                         }
+                                }
+                                
+                                # ---------------------------------------------------
+                                # 2) ONE GRAPH PER YEAR
+                                # ---------------------------------------------------
+                                if (input$weights_view == "year") {
                                         
-                                        # Add the subplot in the list
-                                        subplots[[geo_value]] <- subpl
+                                        time_filtered_data$year <- as.numeric(format(time_filtered_data$time, "%Y"))
+                                        
+                                        weight_by_year_geo <- time_filtered_data %>%
+                                                group_by(year, geo) %>%
+                                                summarise(sum = sum(values, na.rm = TRUE), .groups = "drop")
+                                        
+                                        max_weight <- max(weight_by_year_geo$sum, na.rm = TRUE)
+                                        
+                                        count <- 0
+                                        for (year_value in sort(unique(time_filtered_data$year))) {
+                                                
+                                                count <- count + 1
+                                                filtered_data <- time_filtered_data[time_filtered_data$year == year_value, ]
+                                                filtered_data$values <- ifelse(is.na(filtered_data$values), 0, filtered_data$values)
+                                                
+                                                # Sort countries by selected aggregate weight.
+                                                # Special case:
+                                                # If selected aggregate is CP00, sort by CP01 instead of total weight,
+                                                # since CP00 is always 1000 for all countries.
+                                                if (input$coicop_w == "CP00") {
+                                                        sort_data <- hikp_w_data() %>%
+                                                                mutate(year = as.numeric(format(time, "%Y"))) %>%
+                                                                filter(year == year_value, coicop18 == "CP01", geo %in% unique(filtered_data$geo)) %>%
+                                                                group_by(geo) %>%
+                                                                summarise(sort_weight = sum(values, na.rm = TRUE), .groups = "drop")
+                                                } else {
+                                                        # For all other selected aggregates, sort by the total stacked height
+                                                        # in the current graph (= sum of shown child weights for each country)
+                                                        sort_data <- filtered_data %>%
+                                                                group_by(geo) %>%
+                                                                summarise(sort_weight = sum(values, na.rm = TRUE), .groups = "drop")
+                                                }
+                                                
+                                                geo_order <- sort_data %>%
+                                                        arrange(sort_weight, geo) %>%
+                                                        pull(geo)
+                                                
+                                                # Keep any countries not found in sort_data at the end
+                                                remaining_geo <- setdiff(unique(as.character(filtered_data$geo)), geo_order)
+                                                geo_order <- c(geo_order, sort(remaining_geo))
+                                                
+                                                filtered_data$geo <- factor(filtered_data$geo, levels = geo_order)
+                                                
+                                                if (all(filtered_data$values == 0)) {
+                                                        
+                                                        text_annotation <- list(
+                                                                x = 0.25,
+                                                                y = 0.75,
+                                                                xref = "paper",
+                                                                yref = "paper",
+                                                                text = "Data unavailable",
+                                                                showarrow = FALSE,
+                                                                font = list(size = 14, color = "black")
+                                                        )
+                                                        
+                                                        subpl <- plot_ly(
+                                                                filtered_data,
+                                                                x = ~geo,
+                                                                y = ~values,
+                                                                showlegend = FALSE,
+                                                                color = ~code_label,
+                                                                legendgroup = ~code_label
+                                                        )
+                                                        
+                                                        subpl <- subpl %>%
+                                                                layout(
+                                                                        barmode = 'stack',
+                                                                        annotations = list(
+                                                                                text = as.character(year_value), xref = "paper", yref = "paper",
+                                                                                yanchor = "bottom", xanchor = "center",
+                                                                                align = "center", x = 0.5, y = 0.95, showarrow = FALSE
+                                                                        ),
+                                                                        xaxis = list(title = "", categoryorder = "array", categoryarray = geo_order),
+                                                                        yaxis = list(title = "Weight, per mille")
+                                                                ) %>%
+                                                                layout(annotations = list(text_annotation))
+                                                        
+                                                } else {
+                                                        
+                                                        if (count == 1) {
+                                                                subpl <- plot_ly(
+                                                                        filtered_data,
+                                                                        x = ~geo,
+                                                                        y = ~values,
+                                                                        color = ~code_label,
+                                                                        type = "bar",
+                                                                        legendgroup = ~code_label
+                                                                )
+                                                        } else {
+                                                                subpl <- plot_ly(
+                                                                        filtered_data,
+                                                                        x = ~geo,
+                                                                        y = ~values,
+                                                                        color = ~code_label,
+                                                                        type = "bar",
+                                                                        legendgroup = ~code_label,
+                                                                        showlegend = FALSE
+                                                                )
+                                                        }
+                                                        
+                                                        subpl <- subpl %>%
+                                                                layout(
+                                                                        yaxis = list(range = c(0, max_weight * 1.05), title = "Weight, per mille"),
+                                                                        xaxis = list(
+                                                                                title = "",
+                                                                                categoryorder = "array",
+                                                                                categoryarray = geo_order
+                                                                        ),
+                                                                        barmode = 'stack',
+                                                                        annotations = list(
+                                                                                text = as.character(year_value), xref = "paper", yref = "paper",
+                                                                                yanchor = "bottom", xanchor = "center",
+                                                                                align = "center", x = 0.5, y = 0.95, showarrow = FALSE
+                                                                        )
+                                                                )
+                                                }
+                                                
+                                                subplots[[as.character(year_value)]] <- subpl
+                                        }
                                 }
                                 
-                                plot_rows=1
+                                # ---------------------------------------------------
+                                # Common subplot layout
+                                # ---------------------------------------------------
+                                plot_rows <- 1
                                 
-                                if(length(subplots)>2){
+                                if (length(subplots) > 2) {
+                                        plot_rows <- length(subplots) - 1
+                                }
                                 
-                                plot_rows=length(subplots)-1}
-                                
-                                if((length(subplots) %% 2) == 0) {
-                                        #Even number of subplots
-                                        plot_rows=length(subplots)/2
+                                if ((length(subplots) %% 2) == 0) {
+                                        plot_rows <- length(subplots) / 2
                                 } else {
-                                        #Odd number of subplots
-                                        plot_rows=(length(subplots)+1)/2
+                                        plot_rows <- (length(subplots) + 1) / 2
                                 }
                                 
-                                # 
-                                # Create layout for the frame graph, size depending on number of selected countries
-                                layout <- plotly::subplot(subplots, nrows = plot_rows, titleX=TRUE, shareX=TRUE,titleY=TRUE,shareY=TRUE)
+                                layout <- plotly::subplot(
+                                        subplots,
+                                        nrows = plot_rows,
+                                        titleX = TRUE,
+                                        shareX = FALSE,
+                                        titleY = TRUE,
+                                        shareY = TRUE
+                                )
                                 
-                                if(length(subplots)>2){
-                                layout <- layout %>% layout(height = plot_rows*300,width=1100)
+                                if (length(subplots) > 2) {
+                                        layout <- layout %>% layout(height = plot_rows * 300, width = 1100)
                                 }
-                                if(length(subplots)<=2){
-                                        layout <- layout %>% layout(height = plot_rows*475,width=1100)
+                                if (length(subplots) <= 2) {
+                                        layout <- layout %>% layout(height = plot_rows * 475, width = 1100)
                                 }
                                 
-                                # Create the frame graph
                                 plotly_plot_w <- plotly_build(layout)
-                                
-                                # Add the class "plot-container" to the labels box
                                 plotly_plot_w$x$attrs$legend$x$class <- "plot-container"
                                 
                                 return(plotly_plot_w)
-                                
                         }
                 })
-                
         })
         
         # Create the plot (annual rate of change)
         observeEvent(input$update_ar, {
                 output$plot_ar <- renderPlotly({
                         
-                        req(hikp_ar_data(), input$coicop_ar)
+                        req(hikp_ar_data(), input$coicop_ar, input$ar_view)
+                        
                         data <- hikp_ar_data()
                         
-                        # Filter data based on selected year range
-                        time_filtered_data <- data[as.numeric(format(data$time, "%Y")) >= input$range_slider[1] & as.numeric(format(data$time, "%Y")) <= input$range_slider[2], ]
+                        if (input$ar_view == "country") {
+                                req(input$range_slider)
+                                
+                                time_filtered_data <- data[
+                                        as.numeric(format(data$time, "%Y")) >= input$range_slider[1] &
+                                                as.numeric(format(data$time, "%Y")) <= input$range_slider[2],
+                                ]
+                        }
+                        
+                        if (input$ar_view == "period") {
+                                req(input$select_period_ar)
+                                
+                                time_filtered_data <- data[
+                                        format(data$time, "%Y %B") == input$select_period_ar,
+                                ]
+                        }
+                        
+                        # Check: do contribution sum to +/- 5 % of the annual rates of change?
+                        
+                        ar_check <- time_filtered_data %>%
+                                group_by(geo, time) %>%
+                                summarise(
+                                        sum_contr = sum(Contr_j, na.rm = TRUE),
+                                        ann_rate = first(ann_rate_00[!is.na(ann_rate_00)]),
+                                        n_contr = sum(!is.na(Contr_j)),
+                                        .groups = "drop"
+                                ) %>%
+                                mutate(
+                                        valid_sum = case_when(
+                                                is.na(ann_rate) ~ FALSE,
+                                                n_contr == 0 ~ FALSE,
+                                                TRUE ~ abs(sum_contr - ann_rate) <= 0.05
+                                        )
+                                )
+                                time_filtered_check<<-time_filtered_data
+                                ar_check2<<-ar_check
+                        
+                        valid_geos <- ar_check %>%
+                                group_by(geo) %>%
+                                summarise(all_valid = all(valid_sum), .groups = "drop") %>%
+                                filter(all_valid) %>%
+                                pull(geo)
+                        
+                        time_filtered_data <- time_filtered_data %>%
+                                filter(geo %in% valid_geos)
+                        
+                        validate(
+                                need(nrow(time_filtered_data) > 0,
+                                     "Due to data gaps, the annual contributions cannot be calculated.")
+                        )
                         
                         time_filtered_data$sign <- ifelse(time_filtered_data$Contr_j > 0, 1, 
                                                           ifelse(time_filtered_data$Contr_j < 0, -1, 1))
@@ -942,6 +1430,7 @@ function(input, output, session) {
                                 group_by(geo, time) %>%
                                 summarise(max_value = max(ann_rate_00, na.rm = TRUE),min_value = min(ann_rate_00, na.rm = TRUE))
                         
+                        
                         max_ar_00 <-max(ar_00_by_geo$max_value)
                         
                         min_ar_00 <-min(ar_00_by_geo$min_value)
@@ -956,129 +1445,303 @@ function(input, output, session) {
                                 min_ar<-min(min_contr,0)
                         }
                         
-
-                        if(is.null(input$coicop_ar)==FALSE && is.null(input$countries_ar)==FALSE){
-                               
-                                #Create list to store subplots
-                                subplots <- list()
+                        if (input$ar_view == "period") {
                                 
-                                # Loop through each unique value in geo "geo"
-                                count <- 0
-                                for (geo_value in unique(time_filtered_data$geo)) {
+                                period_label <- input$select_period_ar
+                                
+                                time_filtered_data$sign <- ifelse(
+                                        time_filtered_data$Contr_j > 0, 1,
+                                        ifelse(time_filtered_data$Contr_j < 0, -1, 1)
+                                )
+                                
+                                filtered_data <- time_filtered_data %>%
+                                        mutate(geo_chr = as.character(geo))
+                                
+                                filtered_data$Contr_j <- ifelse(is.na(filtered_data$Contr_j), 0, filtered_data$Contr_j)
+                                
+                                geo_order <- filtered_data %>%
+                                        group_by(geo_chr) %>%
+                                        summarise(
+                                                sort_rate = ifelse(
+                                                        all(is.na(ann_rate_00)),
+                                                        NA_real_,
+                                                        first(na.omit(ann_rate_00))
+                                                ),
+                                                .groups = "drop"
+                                        ) %>%
+                                        arrange(sort_rate, geo_chr) %>%
+                                        pull(geo_chr)
+                                
+                                geo_order <- unique(as.character(geo_order))
+                                
+                                filtered_data <- filtered_data %>%
+                                        mutate(geo_chr = factor(geo_chr, levels = geo_order))
+                                
+                                bar_data <- filtered_data %>%
+                                        filter(!is.na(code_label_wrapped))
+                                
+                                subpl <- plot_ly(
+                                        bar_data,
+                                        x = ~geo_chr,
+                                        y = ~Contr_j,
+                                        color = ~code_label_wrapped,
+                                        legendgroup = ~code_label_wrapped,
+                                        type = "bar",
+                                        showlegend = TRUE
+                                )
+                                
+                                if (input$contribution_type_ar == "selected higher aggregate") {
                                         
-                                        # Filter dataset for the current geo value
-                                        count <- count + 1
-                                        filtered_data <- time_filtered_data[time_filtered_data$geo == geo_value, ]
+                                        line_data <- filtered_data %>%
+                                                group_by(geo_chr) %>%
+                                                summarise(
+                                                        ann_rate_00 = first(na.omit(ann_rate_00)),
+                                                        .groups = "drop"
+                                                ) %>%
+                                                mutate(geo_chr = factor(as.character(geo_chr), levels = geo_order))
                                         
-                                        filtered_data$Contr_j <- ifelse(is.na(filtered_data$Contr_j), 0, filtered_data$Contr_j)
-                                        
-                                        # Check if all values in "Contr_j" are 0
-                                        if(all(filtered_data$Contr_j == 0 & is.na(filtered_data$ann_rate_00))) {
-                                                
-                                                # If all values are 0, add text "Data unavailable" in the middle
-                                                text_annotation <- list(
-                                                        x = 0.25,
-                                                        y = 0.75,
+                                        subpl <- subpl %>%
+                                                add_trace(
+                                                        data = line_data,
+                                                        x = ~geo_chr,
+                                                        y = ~ann_rate_00,
+                                                        type = "scatter",
+                                                        mode = "markers",
+                                                        inherit = FALSE,
+                                                        name = "Annual rate M/M-12",
+                                                        marker = list(color = "black", size = 10),
+                                                        showlegend = TRUE
+                                                )
+                                }
+                                
+                                y_title <- if (input$contribution_type_ar == "selected higher aggregate") {
+                                        "Annual rate of change, %"
+                                } else {
+                                        "Contrib. to HICP M/M-12, %-points"
+                                }
+                                
+                                subpl <- subpl %>%
+                                        layout(
+                                                yaxis = list(
+                                                        range = c(
+                                                                ifelse(min_ar == 0, min_ar, min_ar * 1.05),
+                                                                ifelse(max_ar == 0, max_ar, max_ar * 1.05)
+                                                        ),
+                                                        title = y_title
+                                                ),
+                                                xaxis = list(
+                                                        title = "",
+                                                        type = "category",
+                                                        categoryorder = "array",
+                                                        categoryarray = geo_order
+                                                ),
+                                                barmode = "relative",
+                                                annotations = list(
+                                                        text = period_label,
                                                         xref = "paper",
                                                         yref = "paper",
-                                                        text = "Data unavailable",
-                                                        showarrow = FALSE,
-                                                        font = list(size = 14, color = "black")
-                                                )
-                                                
-                                                subpl <- plot_ly(filtered_data,x = ~time, y = ~Contr_j, showlegend = FALSE,color = ~code_label,legendgroup = ~code_label)  # Empty subplot
-                                                subpl <- subpl %>% layout(barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE),xaxis = list(tickformat = "%Y %B"))
-                                                
-                                                
-                                                #Add axis labels
-                                                if (input$contribution_type_ar == "selected higher aggregate") {
-                                                        subpl <- subpl %>% layout(yaxis = list(range = c(min_ar-2, max_ar+2)),barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE),xaxis = list(tickformat = "%Y %B",tickangle = 45))
-                                                        # Add a line for annual rate
-                                                        subpl <- subpl %>% add_trace(filtered_data ,x = ~time, y = ~ann_rate_00, type = 'scatter', mode = 'lines', name = 'Annual rate M/M-12', line = list(color = 'black', dash = 'dash',width = 1.5))
-                                                        # Add axis labels
-                                                        subpl <- subpl %>% layout(xaxis = list(title = ""), yaxis = list(title = "Annual rate of change, %"))
-                                                }
-                                                
-                                                if (input$contribution_type_ar == "all-items HICP") {
-                                                        subpl <- subpl %>% layout(yaxis = list(range = c(ifelse(min_ar==0,min_ar, min_ar*1.05), ifelse(max_ar==0,max_ar,max_ar*1.05))),barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE),xaxis = list(tickformat = "%Y %B",tickangle = 45))
-                                                        print(min_ar)
-                                                        # Add a line for annual rate
-                                                        subpl <- subpl %>% layout(xaxis = list(title = ""), yaxis = list(title = "Contrib. to HICP M/M-12, %-points"))     
-                                                }
-                                                
-        
-                                                subpl <- subpl %>% layout(annotations = list(text_annotation))
-                                        } else {
-                                                # Create a stacked bar chart for current country
-                                                
-                                                if(count == 1) {
-                                                        
-                                                        subpl <- plot_ly(filtered_data, x = ~time, y = ~Contr_j, color = ~code_label, type = "bar", legendgroup = ~code_label)
-                                                } else {
-                                                        subpl <- plot_ly(filtered_data, x = ~time, y = ~Contr_j, color = ~code_label, type = "bar", legendgroup = ~code_label, showlegend = FALSE)
-                                                }
-                                                
-                                                
-                                                
-                                                if (input$contribution_type_ar == "selected higher aggregate") {
-                                                        subpl <- subpl %>% layout(yaxis = list(range = c(ifelse(min_ar==0,min_ar, min_ar*1.05), ifelse(max_ar==0,max_ar,max_ar*1.05))),barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE),xaxis = list(tickformat = "%Y %B",tickangle = 45))
-                                                        # Add a line for annual rate
-                                                        subpl <- subpl %>% add_trace(filtered_data ,x = ~time, y = ~ann_rate_00, type = 'scatter', mode = 'lines', name = 'Annual rate M/M-12', line = list(color = 'black', dash = 'dash',width = 1.5))
-                                                        # Add axis labels
-                                                        subpl <- subpl %>% layout(xaxis = list(title = ""), yaxis = list(title = "Annual rate of change, %"))
-                                                }  
-                                                
-                                                if (input$contribution_type_ar == "all-items HICP") {
-                                                        subpl <- subpl %>% layout(yaxis = list(range = c(ifelse(min_ar==0,min_ar, min_ar*1.05), ifelse(max_ar==0,max_ar,max_ar*1.05))),barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE),xaxis = list(tickformat = "%Y %B",tickangle = 45))
-                                                        # Add a line for annual rate
-                                                        subpl <- subpl %>% layout(xaxis = list(title = ""), yaxis = list(title = "Contrib. to HICP M/M-12, %-points"))
-                                                }  
-                                                
-                                        }
-                                        
-                                        # Add the subplot in the list
-                                        subplots[[geo_value]] <- subpl
-                                }
+                                                        yanchor = "bottom",
+                                                        xanchor = "center",
+                                                        align = "center",
+                                                        x = 0.5,
+                                                        y = 0.95,
+                                                        showarrow = FALSE
+                                                ),
+                                                font = list(size = 11),
+                                                legend.traceorder = "reversed",
+                                                height = 600,
+                                                width = 1100
+                                        )
                                 
-                                plot_rows=1
-                                
-                                if(length(subplots)>2){
-                                        
-                                        plot_rows=length(subplots)-1}
-                                
-                                if((length(subplots) %% 2) == 0) {
-                                        #Even number of subplots
-                                        plot_rows=length(subplots)/2
-                                } else {
-                                        #Odd number of subplots
-                                        plot_rows=(length(subplots)+1)/2
-                                }
-                                
-                                # 
-                                # Create layout for the frame graph, size depending on number of selected countries
-                                layout <- plotly::subplot(subplots, nrows = plot_rows, titleX=TRUE, shareX=TRUE,titleY=TRUE,shareY=TRUE)
-                                
-                                # Customize the legend text with word-wrapping
-                                layout <- layout %>% layout(legend.text = geo_value,font = list(size = 11), legend.traceorder = "reversed")
-                                
-                                if(length(subplots)>2){
-                                        layout <- layout %>% layout(height = plot_rows*300,width=1100)
-                                }
-                                if(length(subplots)<=2){
-                                        layout <- layout %>% layout(height = plot_rows*475,width=1100)
-                                }
-                                
-                                
-                                # Create the frame graph
-                                plotly_plot_ar <- plotly_build(layout)
-                                
-                                # Add the class "plot-container" to the labels box
+                                plotly_plot_ar <- plotly_build(subpl)
                                 plotly_plot_ar$x$attrs$legend$x$class <- "plot-container"
                                 
-                                #Reset the new_plot_ar_data variable to ensure that plot is not shown unless new data is available
-                                
-                                
                                 return(plotly_plot_ar)
+                        }
+                        
+                        if (input$ar_view == "country") {
+                        
+                                if(is.null(input$coicop_ar)==FALSE && is.null(input$countries_ar)==FALSE){
+                                       
+                                        #Create list to store subplots
+                                        subplots <- list()
+                                        
+                                        # Loop through each unique value in geo "geo"
+                                        count <- 0
+                                        for (geo_value in unique(time_filtered_data$geo)) {
+                                                
+                                                # Filter dataset for the current geo value
+                                                count <- count + 1
+                                                filtered_data <- time_filtered_data[time_filtered_data$geo == geo_value, ]
+                                                
+                                                filtered_data$Contr_j <- ifelse(is.na(filtered_data$Contr_j), 0, filtered_data$Contr_j)
+                                                
+                                                bar_data <- filtered_data %>%
+                                                        filter(!is.na(code_label_wrapped))
+                                                
+                                                # Check if all values in "Contr_j" are 0
+                                                if(all(filtered_data$Contr_j == 0 & is.na(filtered_data$ann_rate_00))) {
+                                                        
+                                                        # If all values are 0, add text "Data unavailable" in the middle
+                                                        text_annotation <- list(
+                                                                x = 0.25,
+                                                                y = 0.75,
+                                                                xref = "paper",
+                                                                yref = "paper",
+                                                                text = "Data unavailable",
+                                                                showarrow = FALSE,
+                                                                font = list(size = 14, color = "black")
+                                                        )
+                                                        
+                                                        
+                                                        subpl <- plot_ly(bar_data, x = ~time, y = ~Contr_j, showlegend = FALSE,
+                                                                         color = ~code_label_wrapped, legendgroup = ~code_label_wrapped)
+                                                        
+                                                        # Add axis labels
+                                                        if (input$contribution_type_ar == "selected higher aggregate") {
+                                                                subpl <- subpl %>% layout(
+                                                                        xaxis = list(title = ""),
+                                                                        yaxis = list(title = "Annual rate of change, %")
+                                                                )
+                                                        }
+                                                        
+                                                        if (input$contribution_type_ar == "all-items HICP") {
+                                                                subpl <- subpl %>% layout(
+                                                                        xaxis = list(title = ""),
+                                                                        yaxis = list(title = "Contrib. to HICP M/M-12, %-points")
+                                                                )
+                                                        }
+                                                        
+                                                        subpl <- subpl %>% layout(annotations = list(text_annotation))
+                                                } else {
+                                                        # Create a stacked bar chart for current country
+                                                        
+                                                        if(count == 1) {
+                                                                subpl <- plot_ly(bar_data, x = ~time, y = ~Contr_j, color = ~code_label_wrapped,
+                                                                                 type = "bar", legendgroup = ~code_label_wrapped)
+                                                        } else {
+                                                                subpl <- plot_ly(bar_data, x = ~time, y = ~Contr_j, color = ~code_label_wrapped,
+                                                                                 type = "bar", legendgroup = ~code_label_wrapped, showlegend = FALSE)
+                                                        }
+                                                        
+                                                        
+                                                        if (input$contribution_type_ar == "selected higher aggregate") {
+                                                                
+                                                                subpl <- subpl %>% layout(
+                                                                        yaxis = list(range = c(
+                                                                                ifelse(min_ar == 0, min_ar, min_ar * 1.05),
+                                                                                ifelse(max_ar == 0, max_ar, max_ar * 1.05)
+                                                                        )),
+                                                                        barmode = "relative",
+                                                                        annotations = list(
+                                                                                text = geo_value,
+                                                                                xref = "paper",
+                                                                                yref = "paper",
+                                                                                yanchor = "bottom",
+                                                                                xanchor = "center",
+                                                                                align = "center",
+                                                                                x = 0.5,
+                                                                                y = 0.95,
+                                                                                showarrow = FALSE
+                                                                        ),
+                                                                        xaxis = list(tickformat = "%Y %B", tickangle = 45)
+                                                                )
+                                                                
+                                                                line_data <- filtered_data %>%
+                                                                        filter(!is.na(ann_rate_00)) %>%
+                                                                        distinct(time, geo, .keep_all = TRUE) %>%
+                                                                        arrange(time)
+                                                                
+                                                                subpl <- subpl %>% add_trace(
+                                                                        data = line_data,
+                                                                        x = ~time,
+                                                                        y = ~ann_rate_00,
+                                                                        type = "scatter",
+                                                                        mode = "lines",
+                                                                        inherit = FALSE,
+                                                                        name = "Annual rate M/M-12",
+                                                                        line = list(color = "black", dash = "dash", width = 1.5),
+                                                                        showlegend = (count == 1)
+                                                                ) %>%
+                                                                        layout(xaxis = list(title = ""), yaxis = list(title = "Annual rate of change, %"))
+                                                        }
+                                                        
+                                                        if (input$contribution_type_ar == "all-items HICP") {
+                                                                
+                                                                subpl <- subpl %>% layout(
+                                                                        yaxis = list(range = c(
+                                                                                ifelse(min_ar == 0, min_ar, min_ar * 1.05),
+                                                                                ifelse(max_ar == 0, max_ar, max_ar * 1.05)
+                                                                        )),
+                                                                        barmode = "relative",
+                                                                        annotations = list(
+                                                                                text = geo_value,
+                                                                                xref = "paper",
+                                                                                yref = "paper",
+                                                                                yanchor = "bottom",
+                                                                                xanchor = "center",
+                                                                                align = "center",
+                                                                                x = 0.5,
+                                                                                y = 0.95,
+                                                                                showarrow = FALSE
+                                                                        ),
+                                                                        xaxis = list(tickformat = "%Y %B", tickangle = 45)
+                                                                ) %>%
+                                                                        layout(xaxis = list(title = ""), yaxis = list(title = "Contrib. to HICP M/M-12, %-points"))
+                                                        }
+                                                }
+                                                # Add the subplot in the list
+                                                subplots[[geo_value]] <- subpl
+                                        }
+                                       
+                                        
+                                        plot_rows=1
+                                        
+                                        if(length(subplots)>2){
+                                                
+                                                plot_rows=length(subplots)-1}
+                                        
+                                        if((length(subplots) %% 2) == 0) {
+                                                #Even number of subplots
+                                                plot_rows=length(subplots)/2
+                                        } else {
+                                                #Odd number of subplots
+                                                plot_rows=(length(subplots)+1)/2
+                                        }
+                                        
+                                        # 
+                                        # Create layout for the frame graph, size depending on number of selected countries
+                                        layout <- plotly::subplot(subplots, nrows = plot_rows, titleX=TRUE, shareX=TRUE,titleY=TRUE,shareY=TRUE)
+                                        
+                                        # Customize the legend text with word-wrapping
+                                        layout <- layout %>%
+                                                layout(
+                                                        font = list(size = 11),
+                                                        legend.traceorder = "reversed"
+                                                )
+                                        
+                                        if(length(subplots)>2){
+                                                layout <- layout %>% layout(height = plot_rows*300,width=1100)
+                                        }
+                                        if(length(subplots)<=2){
+                                                layout <- layout %>% layout(height = plot_rows*475,width=1100)
+                                        }
+                                        
+                                        
+                                        # Create the frame graph
+                                        plotly_plot_ar <- plotly_build(layout)
+                                        
+                                        # Add the class "plot-container" to the labels box
+                                        plotly_plot_ar$x$attrs$legend$x$class <- "plot-container"
+                                        
+                                        #Reset the new_plot_ar_data variable to ensure that plot is not shown unless new data is available
+                                        
+                                        
+                                        return(plotly_plot_ar)
+                                }        
+                                
+                
+                                
                                 
                         }
                 })
@@ -1089,19 +1752,18 @@ function(input, output, session) {
         observeEvent(input$update_mr, {
                 output$plot_mr <- renderPlotly({
                         
-                        req(hikp_mr_data(), input$coicop_mr,input$select_period_mr)
+                        #req(hikp_mr_data(), input$coicop_mr,input$select_period_mr)
+                        req(hikp_mr_data(), input$coicop_mr, input$select_period_mr, input$mr_view)
+                        
                         data <- hikp_mr_data()
                         
                         # Filter data based on selected year range
                         
                         time_filtered_data <- data[format(data$time, "%Y %B") %in% input$select_period_mr, ]
                         
-                        time_filtered_data$sign <- ifelse(time_filtered_data$Contr_j > 0, 1, 
-                                                          ifelse(time_filtered_data$Contr_j < 0, -1, 1))
-                        
                         # Determine common max and min on y-axis
                         contr_by_geo <- time_filtered_data %>%
-                                group_by(geo, time, sign) %>%
+                                group_by(geo, time) %>%
                                 summarise(sum_value = sum(Contr_j, na.rm = TRUE))
                         
                         max_contr <-max(contr_by_geo$sum_value)
@@ -1116,18 +1778,144 @@ function(input, output, session) {
                         
                         min_mr_00 <-min(mr_00_by_geo$min_value)
                         
-                        #...depending on the type of contribution selected
-                        if (input$contribution_type == "selected higher aggregate") {
-                                max_mr<-max(max_mr_00,max_contr,0)
-                                min_mr<-min(min_mr_00,min_contr,0)
+                        max_mr<-max(max_mr_00,max_contr)
+                        
+                        min_mr<-min(min_mr_00,min_contr,0)
+                        
+                        if (input$mr_view == "period") {
                                 
-                        } else if (input$contribution_type == "all-items HICP") {
-                                max_mr<-max(max_contr,0)
-                                min_mr<-min(min_contr,0)
+                                subplots <- list()
+                                count <- 0
+                                
+                                period_order <- time_filtered_data %>%
+                                        mutate(time_ym = as.yearmon(time)) %>%
+                                        distinct(time_ym) %>%
+                                        arrange(desc(time_ym)) %>%
+                                        pull(time_ym)
+                                
+                                for (period_value in period_order) {
+                                        
+                                        count <- count + 1
+                                        
+                                        filtered_data <- time_filtered_data %>%
+                                                mutate(
+                                                        time_ym = as.yearmon(time),
+                                                        geo_chr = as.character(geo)
+                                                ) %>%
+                                                filter(time_ym == as.yearmon(period_value))
+                                        
+                                        filtered_data$Contr_j <- ifelse(is.na(filtered_data$Contr_j), 0, filtered_data$Contr_j)
+                                        
+                                        geo_order <- filtered_data %>%
+                                                group_by(geo_chr) %>%
+                                                summarise(
+                                                        sort_rate = first(na.omit(m_rate_00)),
+                                                        .groups = "drop"
+                                                ) %>%
+                                                arrange(sort_rate, geo_chr) %>%
+                                                pull(geo_chr)
+                                        
+                                        geo_order <- unique(as.character(geo_order))
+                                        
+                                        filtered_data <- filtered_data %>%
+                                                mutate(geo_chr = factor(geo_chr, levels = geo_order))
+                                        
+                                        period_label <- format(as.yearmon(period_value), "%Y %B")
+                                        
+                                        bar_data <- filtered_data %>%
+                                                filter(!is.na(code_label_wrapped))
+                                        
+                                        subpl <- plot_ly(
+                                                bar_data,
+                                                x = ~geo_chr,
+                                                y = ~Contr_j,
+                                                color = ~code_label_wrapped,
+                                                legendgroup = ~code_label_wrapped,
+                                                type = "bar",
+                                                showlegend = count == 1
+                                        )
+                                        
+                                        line_data <- filtered_data %>%
+                                                group_by(geo_chr) %>%
+                                                summarise(
+                                                        m_rate_00 = first(na.omit(m_rate_00)),
+                                                        .groups = "drop"
+                                                ) %>%
+                                                mutate(geo_chr = factor(as.character(geo_chr), levels = geo_order))
+                                        
+                                        subpl <- subpl %>%
+                                                add_trace(
+                                                        data = line_data,
+                                                        x = ~geo_chr,
+                                                        y = ~m_rate_00,
+                                                        type = "scatter",
+                                                        mode = "markers",
+                                                        inherit = FALSE,
+                                                        name = "Monthly rate M/M-1",
+                                                        marker = list(color = "black", size = 10),
+                                                        showlegend = count == 1
+                                                ) %>%
+                                                layout(
+                                                        yaxis = list(
+                                                                range = c(min_mr - 1.0, max_mr + 1.0),
+                                                                title = "Monthly rate of change, %"
+                                                        ),
+                                                        xaxis = list(
+                                                                title = "",
+                                                                type = "category",
+                                                                categoryorder = "array",
+                                                                categoryarray = geo_order
+                                                        ),
+                                                        barmode = "relative",
+                                                        annotations = list(
+                                                                text = period_label,
+                                                                xref = "paper",
+                                                                yref = "paper",
+                                                                yanchor = "bottom",
+                                                                xanchor = "center",
+                                                                align = "center",
+                                                                x = 0.5,
+                                                                y = 0.95,
+                                                                showarrow = FALSE
+                                                        )
+                                                )
+                                        
+                                        subplots[[period_label]] <- subpl
+                                }
+                                
+                                plot_rows <- if ((length(subplots) %% 2) == 0) {
+                                        length(subplots) / 2
+                                } else {
+                                        (length(subplots) + 1) / 2
+                                }
+                                
+                                layout <- plotly::subplot(
+                                        subplots,
+                                        nrows = plot_rows,
+                                        titleX = TRUE,
+                                        shareX = FALSE,
+                                        titleY = TRUE,
+                                        shareY = TRUE
+                                ) %>%
+                                        layout(
+                                                font = list(size = 11),
+                                                legend.traceorder = "reversed"
+                                        )
+                                
+                                if (length(subplots) > 2) {
+                                        layout <- layout %>% layout(height = plot_rows * 300, width = 1100)
+                                }
+                                if (length(subplots) <= 2) {
+                                        layout <- layout %>% layout(height = plot_rows * 475, width = 1100)
+                                }
+                                
+                                plotly_plot_mr <- plotly_build(layout)
+                                plotly_plot_mr$x$attrs$legend$x$class <- "plot-container"
+                                
+                                return(plotly_plot_mr)
                         }
                         
-
-                        
+                        if (input$mr_view == "country") {
                         if(is.null(input$coicop_mr)==FALSE && is.null(input$countries_mr)==FALSE){
                                 
                                 #Create list to store subplots
@@ -1146,6 +1934,9 @@ function(input, output, session) {
                                         # Sort data based on time and then on Contr_j
                                         filtered_data <- filtered_data[order(filtered_data$time, filtered_data$Contr_j), ]
                                         
+                                        bar_data <- filtered_data %>%
+                                                filter(!is.na(code_label_wrapped))
+                                        
                                         # Filter unique time values for the x-axis tick labels
                                         x_axis_tick_labels <- unique(filtered_data$time)
                                         
@@ -1157,9 +1948,8 @@ function(input, output, session) {
                                                 title = "",
                                                 tickmode = "array",
                                                 tickvals = x_axis_tick_labels,
-                                                #ticktext = x_axis_tick_labels,
-                                                tickformat = "%Y %B",
-                                                tickangle = 45
+                                                ticktext = x_axis_tick_labels,
+                                                tickformat = "%Y %B"
                                         )
                                         
                                         # Check if all values in "Contr_j" are 0
@@ -1175,58 +1965,51 @@ function(input, output, session) {
                                                         font = list(size = 14, color = "black")
                                                 )
                                                 
-                                                subpl <- plot_ly(filtered_data,x = ~time, y = ~Contr_j, showlegend = FALSE,color = ~code_label,legendgroup = ~code_label)  # Empty subplot
+                                                subpl <- plot_ly(bar_data,x = ~time, y = ~Contr_j, showlegend = FALSE,color = ~code_label_wrapped,legendgroup = ~code_label_wrapped)  # Empty subplot
                                                 subpl <- subpl %>% layout(barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE))
                                                 
                                                 # Add axis labels
-                                                #subpl <- subpl %>% layout(xaxis = x_axis_layout, yaxis = list(title = "Monthly rate of change, %"))
-                                                
-                                                if (input$contribution_type == "selected higher aggregate") {
-                                                        subpl <- subpl %>% layout(xaxis = x_axis_layout,yaxis = list(title = "Monthly rate of change, %",range = c(ifelse(min_mr==0,min_mr, min_mr*1.05), ifelse(max_mr==0,max_mr,max_mr*1.05))),barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE))
-                                                }  
-                                                
-                                                if (input$contribution_type == "all-items HICP") {
-                                                        subpl <- subpl %>% layout(xaxis = x_axis_layout,yaxis = list(range = c(ifelse(min_mr==0,min_mr, min_mr*1.05), ifelse(max_mr==0,max_mr,max_mr*1.05))),barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE))
-                                                        
-                                                        # Add axis labels
-                                                        subpl <- subpl %>% layout(xaxis = list(title = ""), yaxis = list(title = "Contr. to all-items M/M-1, %"))
-                                                }  
-                                                
+                                                subpl <- subpl %>% layout(xaxis = x_axis_layout, yaxis = list(title = "Monthly rate of change, %"))
                                                 subpl <- subpl %>% layout(annotations = list(text_annotation),xaxis = x_axis_layout)
                                         } else {
                                                 # Create a stacked bar chart for current country
                                                 
                                                 if(count == 1) {
-                                                        subpl <- plot_ly(filtered_data, x = ~time, y = ~Contr_j, color = ~code_label, type = "bar", legendgroup = ~code_label)
+                                                        subpl <- plot_ly(bar_data, x = ~time, y = ~Contr_j, color = ~code_label_wrapped, type = "bar", legendgroup = ~code_label_wrapped)
                                                 } else {
-                                                        subpl <- plot_ly(filtered_data, x = ~time, y = ~Contr_j, color = ~code_label, type = "bar", legendgroup = ~code_label, showlegend = FALSE)
+                                                        subpl <- plot_ly(bar_data, x = ~time, y = ~Contr_j, color = ~code_label_wrapped, type = "bar", legendgroup = ~code_label_wrapped, showlegend = FALSE)
                                                 }
                                                 
+                                                subpl <- subpl %>% layout(yaxis = list(range = c((min_mr-1.0), max_mr + 1.0)),barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE))
                                                 
+                                                # Lägg till linjediagram
+                                                
+                                                line_data <- filtered_data %>%
+                                                        filter(!is.na(m_rate_00)) %>%
+                                                        distinct(time, geo, .keep_all = TRUE) %>%
+                                                        arrange(time)
+                                                
+                                                subpl <- subpl %>%
+                                                        add_trace(
+                                                                data = line_data,
+                                                                x = ~time,
+                                                                y = ~m_rate_00,
+                                                                type = "scatter",
+                                                                mode = "markers",
+                                                                inherit = FALSE,
+                                                                name = "Monthly rate M/M-1",
+                                                                marker = list(color = "black", size = 10),
+                                                                showlegend = count == 1
+                                                        )
                                                 
                                                 # Add axis labels
                                                 subpl <- subpl %>% layout(xaxis = x_axis_layout, yaxis = list(title = "Monthly rate of change, %"))
-                                                
-                                                if (input$contribution_type == "selected higher aggregate") {
-                                                        subpl <- subpl %>% layout(yaxis = list(range = c(ifelse(min_mr==0,min_mr, min_mr*1.05), ifelse(max_mr==0,max_mr,max_mr*1.05))),barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE))
-                                                        
-                                                        # Lägg till linjediagram
-                                                        subpl <- subpl %>% add_trace(filtered_data ,x = ~time, y = ~m_rate_00, type = 'scatter', mode = 'markers', name = 'Monthly rate M/M-1', marker = list(color = 'black', size = 10))
-                                                        
-                                                }  
-                                                
-                                                if (input$contribution_type == "all-items HICP") {
-                                                        subpl <- subpl %>% layout(yaxis = list(range = c(ifelse(min_mr==0,min_mr, min_mr*1.05), ifelse(max_mr==0,max_mr,max_mr*1.05))),barmode = 'relative', annotations = list(text = geo_value, xref = "paper", yref = "paper", yanchor = "bottom", xanchor = "center", align = "center", x = 0.5, y = 0.95, showarrow = FALSE))
-                                                        
-                                                        # Add axis labels
-                                                        subpl <- subpl %>% layout(xaxis = list(title = ""), yaxis = list(title = "Contr. to all-items M/M-1, %"))
-                                                }  
-                                                
                                         }
                                         
                                         # Add the subplot in the list
                                         subplots[[geo_value]] <- subpl
-                                }
+                                }}
+                                
                                 
                                 plot_rows=1
                                 
@@ -1302,7 +2085,7 @@ function(input, output, session) {
                         
                         # Step 5: Sort after coicop, geo, year and month
                         data <- data %>%
-                                arrange(coicop, geo, year,month)
+                                arrange(coicop18, geo, year,month)
                         
                         time_filtered_data <- data[data$year %in% input$select_years_se, ]
                         
@@ -1325,7 +2108,7 @@ function(input, output, session) {
                         }
                         
                         nrows_time_filtered_data<-0
-                            
+                        
                         
                         if(is.null(input$coicop_se)==FALSE && is.null(input$countries_se)==FALSE){
                                 
@@ -1398,7 +2181,7 @@ function(input, output, session) {
                                 # 
                                 # Create layout for the frame graph, size depending on number of selected countries
                                 if(length(subplots)>0){
-                                frame_layout <- plotly::subplot(subplots, nrows = plot_rows, titleX=TRUE, shareX=TRUE,titleY=TRUE,shareY=TRUE)
+                                        frame_layout <- plotly::subplot(subplots, nrows = plot_rows, titleX=TRUE, shareX=TRUE,titleY=TRUE,shareY=TRUE)
                                 }
                                 
                                 if(length(subplots)>2){
@@ -1416,7 +2199,7 @@ function(input, output, session) {
                                         plotly_plot_se$x$attrs$legend$x$class <- "plot-container"
                                         return(plotly_plot_se)
                                 }
-
+                                
                         }
                 })
                 
@@ -1439,7 +2222,40 @@ function(input, output, session) {
                         data$time <- as.Date(as.yearmon(data$time), format="%Y %B")
                         
                         if(is.null(input$coicops)==FALSE && new_plot_data==TRUE && new_rebased_data==TRUE){
-                                plotly_plot <- plot_ly(data, x = ~time, y = ~newbase, color = ~geo, linetype = ~coicop, type = 'scatter', mode = 'lines')
+                                #plotly_plot <- plot_ly(data, x = ~time, y = ~newbase, color = ~geo, linetype = ~coicop18, type = 'scatter', mode = 'lines')
+                                
+                                data <- data %>%
+                                        mutate(
+                                                series_label = case_when(
+                                                        measure == "HICP-CT" ~ paste0(geo, " CT"),
+                                                        measure == "HICP" ~ as.character(geo),
+                                                        TRUE ~ paste(geo, measure)
+                                                ),
+                                                line_group = paste(geo, coicop18, measure, sep = "_")
+                                        )
+                                
+                                plotly_plot <- plot_ly()
+                                
+                                for (series in unique(data$line_group)) {
+                                        
+                                        series_data <- data %>%
+                                                filter(line_group == series) %>%
+                                                arrange(time)
+                                        
+                                        plotly_plot <- plotly_plot %>%
+                                                add_trace(
+                                                        data = series_data,
+                                                        x = ~time,
+                                                        y = ~newbase,
+                                                        type = "scatter",
+                                                        mode = "lines",
+                                                        name = unique(series_data$series_label),
+                                                        line = list(
+                                                                dash = ifelse(unique(series_data$measure) == "HICP-CT", "dash", "solid")
+                                                        ),
+                                                        showlegend = TRUE
+                                                )
+                                }
                                 
                                 y_label <- paste("Index", input$select_years, "=100")
                                 plotly_plot <- plotly_plot %>% 
@@ -1463,7 +2279,7 @@ function(input, output, session) {
                                                         )
                                                 ))
                                         
-                                labled_input_coicop<-left_join(data.frame(input$coicops),coicop_set, by = c("input.coicops"="coicop_code"))
+                                labled_input_coicop<-left_join(data.frame(input$coicops),coicop_set, by = c("input.coicops"="coicop18_code"))
                                 
                                 # Retrieve values from input$coicops and separate them with commas
                               
@@ -1525,7 +2341,7 @@ function(input, output, session) {
                      
                      # Remove rows with NAs
                      data <- filter(data, time >= first_non_na_year)
-                     ddata<-data%>%select(coicop,geo,time,newbase)
+                     ddata<-data%>%select(coicop18,geo,time,newbase)
                      data$time <- toString(as.Date(as.yearmon(ddata$time), format="%Y %B"))
                 
                      write.csv(ddata, con)
@@ -1553,11 +2369,16 @@ function(input, output, session) {
                 },
                 content = function(con_ar) {
                         data <- hikp_ar_data()
-                        data$time <- substr(data$time, 1, 4)
-                        ddata<-data%>%select(coicop,geo,time,Contr_j,ann_rate_00)
+                        #data$time <- substr(data$time, 1, 4)
+                        data$year <- year(data$time)
+                        data$month <- month(data$time)
+                        ddata<-data%>%select(coicop18,geo,year,month,Contr_j,ann_rate_00)
                         
                         write.csv(ddata, con_ar)
                 })
+        
+        
+
         
         #Download monthly rates data
         output$downloadData_mr <- downloadHandler(
@@ -1569,22 +2390,9 @@ function(input, output, session) {
                         #data$time <- substr(data$time, 1, 4)
                         data$year <- year(data$time)
                         data$month <- month(data$time)
-                        ddata<-data%>%select(coicop,geo,time,month,year,Contr_j,m_rate_00)
+                        ddata<-data%>%select(coicop18,geo,time,month,year,Contr_j,m_rate_00)
                         
                         write.csv(ddata, con_mr)
-                })
-        
-        #Download seasonal data
-        output$downloadData_se <- downloadHandler(
-                filename = function() {
-                        paste('data-', Sys.Date(), '.csv', sep='')
-                },
-                content = function(se_data) {
-                        data <- hikp_se_data()
-
-                        ddata<-data%>%select(coicop,geo,time,month,year,index_dec_prv_yr)
-                        
-                        write.csv(ddata, se_data)
                 })
 
 }
