@@ -79,6 +79,16 @@ function(input, output, session) {
                 
                 coicops <- ifelse(input$coicops == "CP00", "TOTAL", input$coicops)
                 
+                selected_countries <- input$countries
+                
+                backdrop_countries <- if (isTRUE(input$index_backdrop_eu)) {
+                        setdiff(country_groups[["All EU countries"]], selected_countries)
+                } else {
+                        character(0)
+                }
+                
+                countries_to_fetch <- union(selected_countries, backdrop_countries)
+                
                 tryCatch({
                         
                         data_list <- list()
@@ -88,7 +98,7 @@ function(input, output, session) {
                                         "prc_hicp_minr",
                                         filters = list(
                                                 unit = "I25",
-                                                geo = input$countries,
+                                                geo = countries_to_fetch,
                                                 coicop18 = coicops
                                         ),
                                         update_cache = TRUE
@@ -105,7 +115,7 @@ function(input, output, session) {
                                         "prc_hicp_ct",
                                         filters = list(
                                                 unit = "I25",
-                                                geo = input$countries,
+                                                geo = countries_to_fetch,
                                                 coicop18 = coicops
                                         ),
                                         update_cache = TRUE
@@ -2211,7 +2221,19 @@ function(input, output, session) {
                         req(plot_data)
                         data <- plot_data()
                         
-                        data <- data[data$geo %in% input$countries, ]
+                        selected_countries <- input$countries
+                        
+                        backdrop_countries <- if (isTRUE(input$index_backdrop_eu)) {
+                                setdiff(country_groups[["All EU countries"]], selected_countries)
+                        } else {
+                                character(0)
+                        }
+                        
+                        countries_to_plot <- union(selected_countries, backdrop_countries)
+                        
+                        data <- data %>%
+                                filter(geo %in% countries_to_plot) %>%
+                                mutate(is_backdrop = geo %in% backdrop_countries)
                         
                         # Find the first year where values contains index numbers
                         first_non_na_year <- min(data$time[!is.na(data$values)])
@@ -2236,7 +2258,10 @@ function(input, output, session) {
                                 
                                 plotly_plot <- plot_ly()
                                 
-                                for (series in unique(data$line_group)) {
+                                plotly_plot <- plot_ly()
+                                
+                                # Draw backdrop first, so selected countries will come out on top
+                                for (series in unique(data$line_group[data$is_backdrop])) {
                                         
                                         series_data <- data %>%
                                                 filter(line_group == series) %>%
@@ -2251,7 +2276,40 @@ function(input, output, session) {
                                                         mode = "lines",
                                                         name = unique(series_data$series_label),
                                                         line = list(
+                                                                color = "rgba(150,150,150,0.35)",
+                                                                width = 0.8,
                                                                 dash = ifelse(unique(series_data$measure) == "HICP-CT", "dash", "solid")
+                                                        ),
+                                                        hoverinfo = "text",
+                                                        text = ~paste0(
+                                                                geo, "<br>",
+                                                                measure, "<br>",
+                                                                coicop18, "<br>",
+                                                                format(time, "%Y-%m"), ": ",
+                                                                round(newbase, 1)
+                                                        ),
+                                                        showlegend = FALSE
+                                                )
+                                }
+                                
+                                # Draw selected countries by normal colors
+                                for (series in unique(data$line_group[!data$is_backdrop])) {
+                                        
+                                        series_data <- data %>%
+                                                filter(line_group == series) %>%
+                                                arrange(time)
+                                        
+                                        plotly_plot <- plotly_plot %>%
+                                                add_trace(
+                                                        data = series_data,
+                                                        x = ~time,
+                                                        y = ~newbase,
+                                                        type = "scatter",
+                                                        mode = "lines",
+                                                        name = unique(series_data$series_label),
+                                                        line = list(
+                                                                dash = ifelse(unique(series_data$measure) == "HICP-CT", "dash", "solid"),
+                                                                width = 2
                                                         ),
                                                         showlegend = TRUE
                                                 )
