@@ -10,7 +10,7 @@ function(input, output, session) {
         
         add_country_group_observers <- function(prefix, input_id, session, input, country_groups) {
                 observeEvent(input[[paste0(prefix, "_eu")]], {
-                        updateSelectInput(session, input_id, selected = country_groups[["All EU countries"]])
+                        updateSelectInput(session, input_id, selected = country_groups[["EU"]])
                 })
                 
                 observeEvent(input[[paste0(prefix, "_efta")]], {
@@ -19,6 +19,10 @@ function(input, output, session) {
                 
                 observeEvent(input[[paste0(prefix, "_eu_efta")]], {
                         updateSelectInput(session, input_id, selected = country_groups[["EU + EFTA"]])
+                })
+                
+                observeEvent(input[[paste0(prefix, "_euro")]], {
+                        updateSelectInput(session, input_id, selected = country_groups[["Euro area"]])
                 })
                 
                 observeEvent(input[[paste0(prefix, "_med")]], {
@@ -333,6 +337,8 @@ function(input, output, session) {
                 
                 result_jTOT2 <- left_join(result_jTOT, dec_data_ymin1, by = c("year", "geo","coicop18"))
                 
+             
+                
                 #December y-2 data for TOT
                 
                 dec_data_ymin2 <- result_jTOT %>%
@@ -372,8 +378,11 @@ function(input, output, session) {
                 data<-select(result_jTOT2,year,month,time, geo, coicop18, ann_rate_00, Contr_j)
 
                 
+                #data_no_na <- data %>%
+                #        filter(is.numeric(Contr_j) | is.numeric(ann_rate_00))
+                
                 data_no_na <- data %>%
-                        filter(is.numeric(Contr_j) | is.numeric(ann_rate_00))
+                        filter(!is.na(Contr_j) | !is.na(ann_rate_00))
                 
                 min_years <- data_no_na %>%
                         group_by(geo) %>%
@@ -403,6 +412,22 @@ function(input, output, session) {
                                         wrap_legend(code_label, width = 45)
                                 )
                         )
+                
+                debug_data <- result_jTOT2 %>%
+                        filter(geo == "SE", time == as.yearmon("2026-04")) %>%
+                        select(
+                                geo, time, coicop18,
+                                any_of(c(
+                                        "IX_j", "WT_j",
+                                        "IX_TOT",
+                                        "IX_j_12_ymin1", "IX_j_12_ymin2",
+                                        "IX_j_m_ymin1",
+                                        "Contr_j"
+                                ))
+                        ) %>%
+                        arrange(coicop18)
+                
+                print(debug_data, n = 100)
                 
                 return(merged_data)
         })
@@ -845,32 +870,29 @@ function(input, output, session) {
         })
         
         selected_ar_data <- reactive({
-                req(hikp_ar_data(), input$ar_view)
+                req(hikp_ar_data(), input$ar_view, input$countries_ar)
                 
                 data <- hikp_ar_data() %>%
                         mutate(time = as.yearmon(time)) %>%
                         filter(geo %in% input$countries_ar)
                 
                 data_no_na <- data %>%
-                        filter(!is.na(Contr_j) | !is.na(ann_rate_00))
+                        filter(
+                                !is.na(Contr_j) | !is.na(ann_rate_00),
+                                !(is.na(ann_rate_00) & is.na(Contr_j))
+                        )
                 
-                min_times <- data_no_na %>%
-                        group_by(geo) %>%
-                        summarise(min_time = min(time, na.rm = TRUE), .groups = "drop")
-                
-                max_times <- data_no_na %>%
-                        group_by(geo) %>%
-                        summarise(max_time = max(time, na.rm = TRUE), .groups = "drop")
-                
-                first_common_time <- max(min_times$min_time)
-                last_common_time  <- min(max_times$max_time)
-                
-                available_times <- data %>%
-                        filter(time >= first_common_time,
-                               time <= last_common_time) %>%
-                        distinct(time) %>%
+                available_times <- data_no_na %>%
+                        distinct(geo, time) %>%
+                        count(time, name = "n_geo") %>%
+                        filter(n_geo == length(input$countries_ar)) %>%
                         arrange(desc(time)) %>%
                         pull(time)
+                
+                validate(
+                        need(length(available_times) > 0,
+                             "No common periods with data for the selected countries.")
+                )
                 
                 if (input$ar_view == "period") {
                         period_list <- format(available_times, "%Y %B")
@@ -1390,38 +1412,13 @@ function(input, output, session) {
                                 ]
                         }
                         
-                        # Check: do contribution sum to +/- 5 % of the annual rates of change?
-                        
-                        ar_check <- time_filtered_data %>%
-                                group_by(geo, time) %>%
-                                summarise(
-                                        sum_contr = sum(Contr_j, na.rm = TRUE),
-                                        ann_rate = first(ann_rate_00[!is.na(ann_rate_00)]),
-                                        n_contr = sum(!is.na(Contr_j)),
-                                        .groups = "drop"
-                                ) %>%
-                                mutate(
-                                        valid_sum = case_when(
-                                                is.na(ann_rate) ~ FALSE,
-                                                n_contr == 0 ~ FALSE,
-                                                TRUE ~ abs(sum_contr - ann_rate) <= 0.05
-                                        )
-                                )
-                                time_filtered_check<<-time_filtered_data
-                                ar_check2<<-ar_check
-                        
-                        valid_geos <- ar_check %>%
-                                group_by(geo) %>%
-                                summarise(all_valid = all(valid_sum), .groups = "drop") %>%
-                                filter(all_valid) %>%
-                                pull(geo)
-                        
-                        time_filtered_data <- time_filtered_data %>%
-                                filter(geo %in% valid_geos)
                         
                         validate(
-                                need(nrow(time_filtered_data) > 0,
-                                     "Due to data gaps, the annual contributions cannot be calculated.")
+                                need(
+                                        any(!is.na(time_filtered_data$Contr_j)) |
+                                                any(!is.na(time_filtered_data$ann_rate_00)),
+                                        "No data for the selected country/countries and period."
+                                )
                         )
                         
                         time_filtered_data$sign <- ifelse(time_filtered_data$Contr_j > 0, 1, 
@@ -2329,13 +2326,14 @@ function(input, output, session) {
                                                         y = 0,
                                                         xref="paper",
                                                         yref="paper",
-                                                        text = "Source: Eurostat and own calculations.",
+                                                        text = "",#"Source: Eurostat and own calculations.",
                                                         showarrow = FALSE,
                                                         font = list(
                                                                 color = "black",
                                                                 size = 10  
-                                                        )
-                                                ))
+                                                       )
+                                                )
+                                )
                                         
                                 labled_input_coicop<-left_join(data.frame(input$coicops),coicop_set, by = c("input.coicops"="coicop18_code"))
                                 

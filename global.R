@@ -34,11 +34,10 @@ new_plot_ar_data<-FALSE
 new_plot_w_data<-FALSE
 
 country_groups <- list(
-        "All EU countries" = c(
+        "EU" = c(
                 "AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR",
                 "DE","EL","HU","IE","IT","LV","LT","LU","MT","NL",
-                "PL","PT","RO","SK","SI","ES","SE"
-        ),
+                "PL","PT","RO","SK","SI","ES","SE"),
         "EFTA" = c("IS", "NO", "CH"),
         "EU + EFTA" = c(
                 "AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR",
@@ -46,6 +45,9 @@ country_groups <- list(
                 "PL","PT","RO","SK","SI","ES","SE",
                 "IS","NO","CH"
         ),
+        "Euro area" = c(
+                "AT","BE","HR","CY","EE","FI","FR","DE","EL","IE",
+                "IT","LV","LT","LU","MT","NL","PT","SK","SI","ES"),
         "Mediterranean" = c("EL","ES", "IT", "PT", "CY", "MT"),
         "Nordic" = c("DK", "FI", "IS", "NO", "SE"),
         "Balkan" = c("AL", "BA", "HR", "ME", "MK", "RS", "SI", "XK"),
