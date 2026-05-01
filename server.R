@@ -141,7 +141,7 @@ function(input, output, session) {
                 selected_countries <- input$countries
                 
                 backdrop_countries <- if (isTRUE(input$index_backdrop_eu)) {
-                        setdiff(country_groups[["All EU countries"]], selected_countries)
+                        setdiff(country_groups[["EU"]], selected_countries)
                 } else {
                         character(0)
                 }

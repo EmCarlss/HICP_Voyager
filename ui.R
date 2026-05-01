@@ -95,7 +95,7 @@ ui <- fluidPage(theme = bs_theme(bootswatch = "minty"),
 }
   ")),        
         tags$div(
-                tags$h1("HICP Voyager 2.0", style = "text-align: left; margin-bottom: 10px; margin-top: 10px;font-size: 20px;")
+                tags$h1("HICP Voyager 2.1", style = "text-align: left; margin-bottom: 10px; margin-top: 10px;font-size: 20px;")
         ),
         navbarPage(
                 title = "",
