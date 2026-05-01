@@ -12,7 +12,7 @@ The app allows users to analyse HICP developments by country, COICOP aggregate, 
 - Compare standard HICP with HICP-CT, i.e. HICP at constant tax rates.
 - Rebase indices to a preferred index reference period.
 - View contributions to monthly and annual rates of change for selected aggregates.
-- Quickly select predefined country groups, such as Nordic, Western, Eastern, Benelux and Balkan countries.
+- Quickly select predefined country groups, such as Euro area, Nordic, Western, Eastern, Benelux and Balkan countries.
 - Analyse both regular COICOP aggregates and selected special aggregates.
 
 ## Online version
