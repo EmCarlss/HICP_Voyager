@@ -2,7 +2,7 @@
 
 **HICP Voyager** is an R Shiny dashboard for exploring inflation data across European countries, based on the Harmonised Index of Consumer Prices (HICP).
 
-The app allows users to analyse HICP developments by country, COICOP aggregate and time period, using data retrieved from Eurostat through the R `eurostat` package.
+The app allows users to analyse HICP developments by country, COICOP aggregate, special aggregate and time period, using data retrieved from Eurostat through the R `eurostat` package.
 
 ## Features
 
