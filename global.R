@@ -26,6 +26,46 @@ coicop_set_hierarchy <- coicop_set_hierarchy %>%
 
 label_set<-select(coicop_set_hierarchy, coicop18_code, code_label)
 
+# ------------------------------------------------------------
+# Special aggregates hierarchy
+# ------------------------------------------------------------
+
+sa_hierarchy <- data.frame(
+        coicop18_code = c(
+                "IGD_NNRG",
+                "SERV",
+                "NRG",
+                "FOOD",
+                "FOOD_P",
+                "FOOD_NP",
+                "CP00"
+        ),
+        coicop18 = c(
+                "Non-energy industrial goods",
+                "Services (overall index excluding goods)",
+                "Energy",
+                "Food including alcohol and tobacco",
+                "Processed food including alcohol and tobacco",
+                "Unprocessed food",
+                "Total"
+        ),
+        level = c(2, 2, 2, 2, 3, 3, 1),
+        parent_code = c("CP00", "CP00", "CP00", "CP00", "FOOD", "FOOD", NA_character_),
+        stringsAsFactors = FALSE
+)
+
+sa_hierarchy$code_label <- paste(
+        sa_hierarchy$coicop18_code,
+        sa_hierarchy$coicop18,
+        sep = " "
+)
+
+label_set_ecoicop <- select(coicop_set_hierarchy, coicop18_code, code_label)
+label_set_sa <- select(sa_hierarchy, coicop18_code, code_label)
+
+# Keep existing default label_set for the rest of the app
+label_set <- label_set_ecoicop
+
 clean_eurostat_cache()
 
 new_plot_data<-FALSE

@@ -152,7 +152,29 @@ ui <- fluidPage(theme = bs_theme(bootswatch = "minty"),
                                                 selected = "period"
                                         ),
                                         country_group_buttons("mr"),
-                                        selectInput("countries_mr", "Custom countries selection", choices = setNames(eurostat_countries$code, eurostat_countries$name), multiple = TRUE),selectInput("coicop_mr", "Select product category:", choices = setNames(label_set$coicop18_code, label_set$code_label), multiple = FALSE),
+                                        selectInput(
+                                                "countries_mr",
+                                                "Custom countries selection",
+                                                choices = setNames(eurostat_countries$code, eurostat_countries$name),
+                                                multiple = TRUE
+                                        ),
+                                        
+                                        radioButtons(
+                                                "classification_mr",
+                                                "Classification:",
+                                                choices = c(
+                                                        "ECOICOP ver. 2" = "ecoicop",
+                                                        "Special aggregats" = "sa"
+                                                ),
+                                                selected = "ecoicop"
+                                        ),
+                                        
+                                        selectInput(
+                                                "coicop_mr",
+                                                "Select product category:",
+                                                choices = setNames(label_set$coicop18_code, label_set$code_label),
+                                                multiple = FALSE
+                                        ),
                                         br(),
                                         radioButtons("contribution_type_mr", "Contribution to", choices = c("selected higher aggregate", "all-items HICP"), selected = "selected higher aggregate"),
                                         br(),
@@ -186,7 +208,29 @@ ui <- fluidPage(theme = bs_theme(bootswatch = "minty"),
                                                 selected = "period"
                                         ),
                                         country_group_buttons("ar"),
-                                        selectInput("countries_ar", "Custom countries selection:", choices = setNames(eurostat_countries$code, eurostat_countries$name), multiple = TRUE),selectInput("coicop_ar", "Select product category:", choices = setNames(label_set$coicop18_code, label_set$code_label), multiple = FALSE),
+                                        selectInput(
+                                                "countries_ar",
+                                                "Custom countries selection:",
+                                                choices = setNames(eurostat_countries$code, eurostat_countries$name),
+                                                multiple = TRUE
+                                        ),
+                                        
+                                        radioButtons(
+                                                "classification_ar",
+                                                "Classification:",
+                                                choices = c(
+                                                        "ECOICOP ver. 2" = "ecoicop",
+                                                        "Special aggregats" = "sa"
+                                                ),
+                                                selected = "ecoicop"
+                                        ),
+                                        
+                                        selectInput(
+                                                "coicop_ar",
+                                                "Select product category:",
+                                                choices = setNames(label_set$coicop18_code, label_set$code_label),
+                                                multiple = FALSE
+                                        ),
                                         br(),
                                         radioButtons("contribution_type_ar", "Contribution to", choices = c("selected higher aggregate", "all-items HICP"), selected = "selected higher aggregate"),
                                         br(),

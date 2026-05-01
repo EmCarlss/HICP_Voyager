@@ -71,6 +71,61 @@ function(input, output, session) {
                         gsub("\n", "<br>", .)
         }
         
+        selected_hierarchy <- function(classification) {
+                if (identical(classification, "sa")) {
+                        sa_hierarchy
+                } else {
+                        coicop_set_hierarchy
+                }
+        }
+        
+        selected_label_set <- function(classification) {
+                selected_hierarchy(classification) %>%
+                        select(coicop18_code, code_label)
+        }
+        
+        eurostat_coicop_code <- function(x) {
+                ifelse(x == "CP00", "TOTAL", x)
+        }
+        
+        observeEvent(input$classification_mr, {
+                hierarchy <- selected_hierarchy(input$classification_mr)
+                
+                old_selection <- isolate(input$coicop_mr)
+                
+                new_selection <- if (!is.null(old_selection) && old_selection %in% hierarchy$coicop18_code) {
+                        old_selection
+                } else {
+                        "CP00"
+                }
+                
+                updateSelectInput(
+                        session,
+                        "coicop_mr",
+                        choices = setNames(hierarchy$coicop18_code, hierarchy$code_label),
+                        selected = new_selection
+                )
+        }, ignoreInit = FALSE)
+        
+        observeEvent(input$classification_ar, {
+                hierarchy <- selected_hierarchy(input$classification_ar)
+                
+                old_selection <- isolate(input$coicop_ar)
+                
+                new_selection <- if (!is.null(old_selection) && old_selection %in% hierarchy$coicop18_code) {
+                        old_selection
+                } else {
+                        "CP00"
+                }
+                
+                updateSelectInput(
+                        session,
+                        "coicop_ar",
+                        choices = setNames(hierarchy$coicop18_code, hierarchy$code_label),
+                        selected = new_selection
+                )
+        }, ignoreInit = FALSE)
+        
         hikp_data <- eventReactive(input$update, {
                 req(input$countries, input$coicops, input$index_measure)
                 
@@ -186,7 +241,7 @@ function(input, output, session) {
                 
                 data <- filter(data, time >= max(first_non_na_year))
 
-                label_set<-select(coicop_set_hierarchy, coicop18_code, code_label)
+                label_set <- select(coicop_set_hierarchy, coicop18_code, code_label)
                 
                 # Merged datasets based on ID-column
                 merged_data <- merge(data, label_set, by.x = "coicop18", by.y = "coicop18_code", all.x = TRUE)
@@ -197,9 +252,15 @@ function(input, output, session) {
         #Annual rates data
         hikp_ar_data <- eventReactive(input$update_ar, {
                 
-                req(input$countries_ar, input$coicop_ar)
-                filtered_data <- coicop_set_hierarchy[coicop_set_hierarchy$parent_code == input$coicop_ar, ]
-                coicops <- if (input$coicop_ar == "CP00") "TOTAL" else input$coicop_ar
+                req(input$countries_ar, input$coicop_ar, input$classification_ar)
+                
+                current_hierarchy <- selected_hierarchy(input$classification_ar)
+                
+                filtered_data <- current_hierarchy[
+                        current_hierarchy$parent_code == input$coicop_ar,
+                ]
+                
+                coicops <- eurostat_coicop_code(input$coicop_ar)
 
                 result <- unique(filtered_data$coicop18_code)
                 
@@ -399,8 +460,7 @@ function(input, output, session) {
                 #data <- data %>%
                 #        filter(!is.na(ann_rate_00) | !is.na(Contr_j))
                 
-                label_set<-select(coicop_set_hierarchy, coicop18_code, code_label)
-                
+                label_set <- selected_label_set(input$classification_ar)
                 # Merged datasets based on ID-column
                 merged_data <- merge(data, label_set, by.x = "coicop18", by.y = "coicop18_code", all.x = TRUE)
                 merged_data <- merged_data %>%
@@ -491,7 +551,7 @@ function(input, output, session) {
                 data <- data %>%
                         filter(!is.na(index_dec_prv_yr))
                 
-                label_set<-select(coicop_set_hierarchy, coicop18_code, code_label)
+                label_set <- selected_label_set(input$classification_mr)
                 
                 # Merged datasets based on ID-column
                 merged_data <- merge(data, label_set, by.x = "coicop18", by.y = "coicop18_code", all.x = TRUE)
@@ -504,11 +564,15 @@ function(input, output, session) {
         #Monthly rates data
         hikp_mr_data <- eventReactive(input$update_mr, {
                 
-                req(input$countries_mr, input$coicop_mr)
+                req(input$countries_mr, input$coicop_mr, input$classification_mr)
                 
-                filtered_data <- coicop_set_hierarchy[coicop_set_hierarchy$parent_code == input$coicop_mr, ]
+                current_hierarchy <- selected_hierarchy(input$classification_mr)
                 
-                coicops <- if (input$coicop_mr == "CP00") "TOTAL" else input$coicop_mr
+                filtered_data <- current_hierarchy[
+                        current_hierarchy$parent_code == input$coicop_mr,
+                ]
+                
+                coicops <- eurostat_coicop_code(input$coicop_mr)
                 print(coicops)
                 
                 result <- unique(filtered_data$coicop18_code)
@@ -601,7 +665,7 @@ function(input, output, session) {
                 if (input$contribution_type_mr == "selected higher aggregate") {
                         data_MR <- filter(data_I, coicop18 %in% coicops)
                 } else if (input$contribution_type_mr == "all-items HICP") {
-                        data_MR <- filter(data_I, coicop18 %in% "CP00")
+                        data_MR <- filter(data_I, coicop18 %in% "TOTAL")
                 }
                 
                 data_MR$year <- year(data_MR$time)
@@ -681,11 +745,10 @@ function(input, output, session) {
 
                 
                 
-                data<-select(result_jTOT2,year,month,time, geo, coicop18, m_rate_00, Contr_j)
-             
+                data <- select(result_jTOT2, year, month, time, geo, coicop18, m_rate_00, Contr_j)
                 
                 data_no_na <- data %>%
-                        filter(is.numeric(Contr_j) | is.numeric(m_rate_00))
+                        filter(!is.na(Contr_j) | !is.na(m_rate_00))
                 
                 min_years <- data_no_na %>%
                         group_by(geo) %>%
@@ -702,17 +765,18 @@ function(input, output, session) {
                 data <- data %>%
                         filter(!is.na(m_rate_00) | !is.na(Contr_j))
                
-                label_set<-select(coicop_set_hierarchy, coicop18_code, code_label)
+                label_set <- selected_label_set(input$classification_mr)
                 
-                # Merged datasets based on ID-column
-                merged_data <- merge(data, label_set, by.x = "coicop18", by.y = "coicop18_code", all.x = TRUE)
-                
-                merged_data <- merged_data %>%
+                merged_data <- data %>%
+                        left_join(
+                                label_set,
+                                by = c("coicop18" = "coicop18_code")
+                        ) %>%
                         mutate(
-                                code_label = ifelse(coicop18 == coicops, NA, code_label),
+                                code_label = ifelse(coicop18 == coicops, NA_character_, code_label),
                                 code_label_wrapped = ifelse(
                                         is.na(code_label),
-                                        NA,
+                                        NA_character_,
                                         wrap_legend(code_label, width = 45)
                                 )
                         )
@@ -1816,7 +1880,11 @@ function(input, output, session) {
                                         geo_order <- filtered_data %>%
                                                 group_by(geo_chr) %>%
                                                 summarise(
-                                                        sort_rate = first(na.omit(m_rate_00)),
+                                                        sort_rate = ifelse(
+                                                                all(is.na(m_rate_00)),
+                                                                NA_real_,
+                                                                first(na.omit(m_rate_00))
+                                                        ),
                                                         .groups = "drop"
                                                 ) %>%
                                                 arrange(sort_rate, geo_chr) %>%
@@ -2221,7 +2289,7 @@ function(input, output, session) {
                         selected_countries <- input$countries
                         
                         backdrop_countries <- if (isTRUE(input$index_backdrop_eu)) {
-                                setdiff(country_groups[["All EU countries"]], selected_countries)
+                                setdiff(country_groups[["EU"]], selected_countries)
                         } else {
                                 character(0)
                         }
