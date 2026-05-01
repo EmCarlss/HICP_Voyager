@@ -1,18 +1,29 @@
-# HICP Voyager - Inflation dashboard for Europe
+# HICP Voyager – Inflation Dashboard for Europe
 
-A simple R Shiny dashboard for the Harmonised Index of Consumer Prices (HICP).
+**HICP Voyager** is an R Shiny dashboard for exploring inflation data across European countries, based on the Harmonised Index of Consumer Prices (HICP).
 
-Features
-  - Analyze chained indices, monthly rates (M/M-1),annual rates (M/M-12), seasonality (M/December Y-1, i.e. unchained indices) and weights across countries.
-  - Compare HICP and HICP-CT
-  - Quick selection of country groups (e.g. Nordic, Western, Eastern, Benelux, Balkan)
-  - Rebase indices to preferred index reference period.
-  - See contributions to monthly and annual rates of change for selected aggregates.
+The app allows users to analyse HICP developments by country, COICOP aggregate and time period, using data retrieved from Eurostat through the R `eurostat` package.
 
-Online access:
+## Features
+
+- Analyse chained HICP indices across European countries.
+- Compare monthly rates of change (M/M-1), annual rates of change (M/M-12), seasonal patterns and HICP weights.
+- Explore unchained indices relative to December of the previous year (M/December Y-1).
+- Compare standard HICP with HICP-CT, i.e. HICP at constant tax rates.
+- Rebase indices to a preferred index reference period.
+- View contributions to monthly and annual rates of change for selected aggregates.
+- Quickly select predefined country groups, such as Nordic, Western, Eastern, Benelux and Balkan countries.
+- Analyse both regular COICOP aggregates and selected special aggregates.
+
+## Online version
+
+The app is available here:
+
 https://emcarlss.shinyapps.io/HICP_Voyager/
 
-Data retrieved from Eurostat using the R 'eurostat' package.
+## Data source
+
+Data are retrieved from Eurostat using the R `eurostat` package.
 
 Samples:
 
