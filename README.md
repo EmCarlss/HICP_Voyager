@@ -35,10 +35,6 @@ Data are retrieved from Eurostat using the R `eurostat` package.
 
 <img width="2148" height="880" alt="Monthly HICP rates of change including contributions from sub-aggregates" src="https://github.com/user-attachments/assets/bb62db7d-8904-4ca9-93b8-a3dd22b7ddac" />
 
-### Annual rates of change by period, including contributions from sub-aggregates
-
-<img width="2190" height="1158" alt="Annual HICP rates of change by period including contributions from sub-aggregates" src="https://github.com/user-attachments/assets/3517bf97-ffcb-4e25-a4b9-59b38a2cb859" />
-
 ### Annual rates of change by country, including contributions from sub-aggregates
 
 <img width="2212" height="1718" alt="Annual HICP rates of change by country including contributions from sub-aggregates" src="https://github.com/user-attachments/assets/9685d857-0ce8-49ba-b44f-63b67eb6d285" />
