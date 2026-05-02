@@ -138,6 +138,21 @@ function(input, output, session) {
                 
                 coicops <- ifelse(input$coicops == "CP00", "TOTAL", input$coicops)
                 
+                coicops_selected <- ifelse(input$coicops == "CP00", "TOTAL", input$coicops)
+                
+                validate(
+                        need(
+                                !(isTRUE(input$index_adjust_total) && "TOTAL" %in% coicops_selected),
+                                "The total-inflation adjustment is only meaningful for lower-level aggregates. Please remove all-items HICP from the selected product categories."
+                        )
+                )
+                
+                coicops_to_fetch <- if (isTRUE(input$index_adjust_total)) {
+                        union(coicops_selected, "TOTAL")
+                } else {
+                        coicops_selected
+                }
+                
                 selected_countries <- input$countries
                 
                 backdrop_countries <- if (isTRUE(input$index_backdrop_eu)) {
@@ -158,7 +173,7 @@ function(input, output, session) {
                                         filters = list(
                                                 unit = "I25",
                                                 geo = countries_to_fetch,
-                                                coicop18 = coicops
+                                                coicop18 = coicops_to_fetch
                                         ),
                                         update_cache = TRUE
                                 )
@@ -175,7 +190,7 @@ function(input, output, session) {
                                         filters = list(
                                                 unit = "I25",
                                                 geo = countries_to_fetch,
-                                                coicop18 = coicops
+                                                coicop18 = coicops_to_fetch
                                         ),
                                         update_cache = TRUE
                                 )
@@ -244,7 +259,22 @@ function(input, output, session) {
                 label_set <- select(coicop_set_hierarchy, coicop18_code, code_label)
                 
                 # Merged datasets based on ID-column
-                merged_data <- merge(data, label_set, by.x = "coicop18", by.y = "coicop18_code", all.x = TRUE)
+                merged_data <- merge(
+                        data,
+                        label_set,
+                        by.x = "coicop18",
+                        by.y = "coicop18_code",
+                        all.x = TRUE
+                )
+                
+                merged_data <- merged_data %>%
+                        mutate(
+                                code_label_wrapped = ifelse(
+                                        is.na(code_label),
+                                        NA_character_,
+                                        wrap_legend(code_label, width = 42)
+                                )
+                        )
                 
                 return(merged_data)
         })
@@ -1129,13 +1159,82 @@ function(input, output, session) {
                 req(input$countries_se, input$coicop_se)
         })
         
+        #Function for graph size
+        subplot_dims <- function(
+                n_panels,
+                ncols = NULL,
+                container_width = 960,
+                min_ratio = 1.1,
+                max_ratio = 1.5,
+                target_ratio = 1.3
+        ) {
+                
+                if (is.null(ncols)) {
+                        ncols <- if (n_panels == 1) 1 else 2
+                }
+                
+                nrows <- ceiling(n_panels / ncols)
+                
+                panel_width <- container_width / ncols
+                
+                # target_ratio = width / height
+                panel_height <- panel_width / target_ratio
+                
+                # Begränsa så att width:height håller sig mellan 1.1 och 1.5
+                min_height <- panel_width / max_ratio
+                max_height <- panel_width / min_ratio
+                
+                panel_height <- max(min_height, min(panel_height, max_height))
+                
+                list(
+                        ncols = ncols,
+                        nrows = nrows,
+                        panel_width = panel_width,
+                        panel_height = panel_height,
+                        total_height = ceiling(nrows * panel_height)
+                )
+        }
+        
         #Create index data for plot
         plot_data <- eventReactive(input$rebase,{
                 req(hikp_data())
-                data<-hikp_data()
-                coicop<-input$coicops
-   
-                geo<-input$countries
+                data <- hikp_data()
+                
+                coicops_selected <- ifelse(input$coicops == "CP00", "TOTAL", input$coicops)
+                
+                if (isTRUE(input$index_adjust_total)) {
+                        
+                        total_data <- data %>%
+                                filter(coicop18 == "TOTAL") %>%
+                                select(
+                                        geo,
+                                        time,
+                                        measure,
+                                        total_values = values
+                                )
+                        
+                        data <- data %>%
+                                filter(coicop18 %in% coicops_selected) %>%
+                                left_join(
+                                        total_data,
+                                        by = c("geo", "time", "measure")
+                                ) %>%
+                                mutate(
+                                        original_values = values,
+                                        values = if_else(
+                                                !is.na(values) &
+                                                        !is.na(total_values) &
+                                                        total_values != 0,
+                                                values / total_values * 100,
+                                                NA_real_
+                                        )
+                                )
+                        
+                } else {
+                        
+                        data <- data %>%
+                                filter(coicop18 %in% coicops_selected)
+                }
                         
                 # Adjust filtering depending on choice of period type
                 if (input$period_type == "Full year") {
@@ -1151,7 +1250,7 @@ function(input, output, session) {
                 }
 
                 rebased_data <- left_join(
-                        hikp_data(),
+                        data,
                         avg_refyear,
                         by = c("coicop18", "geo", "measure")
                 )
@@ -1229,8 +1328,8 @@ function(input, output, session) {
                                                                 x = ~time,
                                                                 y = ~values,
                                                                 showlegend = FALSE,
-                                                                color = ~code_label,
-                                                                legendgroup = ~code_label
+                                                                color = ~code_label_wrapped,
+                                                                legendgroup = ~code_label_wrapped
                                                         )
                                                         
                                                         subpl <- subpl %>%
@@ -1253,18 +1352,18 @@ function(input, output, session) {
                                                                         filtered_data,
                                                                         x = ~time,
                                                                         y = ~values,
-                                                                        color = ~code_label,
+                                                                        color = ~code_label_wrapped,
                                                                         type = "bar",
-                                                                        legendgroup = ~code_label
+                                                                        legendgroup = ~code_label_wrapped
                                                                 )
                                                         } else {
                                                                 subpl <- plot_ly(
                                                                         filtered_data,
                                                                         x = ~time,
                                                                         y = ~values,
-                                                                        color = ~code_label,
+                                                                        color = ~code_label_wrapped,
                                                                         type = "bar",
-                                                                        legendgroup = ~code_label,
+                                                                        legendgroup = ~code_label_wrapped,
                                                                         showlegend = FALSE
                                                                 )
                                                         }
@@ -1351,8 +1450,8 @@ function(input, output, session) {
                                                                 x = ~geo,
                                                                 y = ~values,
                                                                 showlegend = FALSE,
-                                                                color = ~code_label,
-                                                                legendgroup = ~code_label
+                                                                color = ~code_label_wrapped,
+                                                                legendgroup = ~code_label_wrapped
                                                         )
                                                         
                                                         subpl <- subpl %>%
@@ -1375,18 +1474,18 @@ function(input, output, session) {
                                                                         filtered_data,
                                                                         x = ~geo,
                                                                         y = ~values,
-                                                                        color = ~code_label,
+                                                                        color = ~code_label_wrapped,
                                                                         type = "bar",
-                                                                        legendgroup = ~code_label
+                                                                        legendgroup = ~code_label_wrapped
                                                                 )
                                                         } else {
                                                                 subpl <- plot_ly(
                                                                         filtered_data,
                                                                         x = ~geo,
                                                                         y = ~values,
-                                                                        color = ~code_label,
+                                                                        color = ~code_label_wrapped,
                                                                         type = "bar",
-                                                                        legendgroup = ~code_label,
+                                                                        legendgroup = ~code_label_wrapped,
                                                                         showlegend = FALSE
                                                                 )
                                                         }
@@ -1415,33 +1514,35 @@ function(input, output, session) {
                                 # ---------------------------------------------------
                                 # Common subplot layout
                                 # ---------------------------------------------------
-                                plot_rows <- 1
                                 
-                                if (length(subplots) > 2) {
-                                        plot_rows <- length(subplots) - 1
-                                }
+                                n_panels <- length(subplots)
                                 
-                                if ((length(subplots) %% 2) == 0) {
-                                        plot_rows <- length(subplots) / 2
-                                } else {
-                                        plot_rows <- (length(subplots) + 1) / 2
-                                }
+                                validate(
+                                        need(n_panels > 0, "No data available for the selected countries and period.")
+                                )
+                                
+                                dims <- subplot_dims(n_panels)
                                 
                                 layout <- plotly::subplot(
                                         subplots,
-                                        nrows = plot_rows,
+                                        nrows = dims$nrows,
                                         titleX = TRUE,
-                                        shareX = FALSE,
+                                        shareX = input$weights_view == "country",
                                         titleY = TRUE,
                                         shareY = TRUE
+                                ) %>%
+                                layout(
+                                        autosize = TRUE,
+                                        height = dims$total_height,
+                                        font = list(size = 11),
+                                        legend = list(
+                                                traceorder = "reversed",
+                                                font = list(size = 11),
+                                                x = 1.02,
+                                                y = 1
+                                        ),
+                                        margin = list(r = 180)
                                 )
-                                
-                                if (length(subplots) > 2) {
-                                        layout <- layout %>% layout(height = plot_rows * 300, width = 1100)
-                                }
-                                if (length(subplots) <= 2) {
-                                        layout <- layout %>% layout(height = plot_rows * 475, width = 1100)
-                                }
                                 
                                 plotly_plot_w <- plotly_build(layout)
                                 plotly_plot_w$x$attrs$legend$x$class <- "plot-container"
@@ -1620,8 +1721,8 @@ function(input, output, session) {
                                                 ),
                                                 font = list(size = 11),
                                                 legend.traceorder = "reversed",
-                                                height = 600,
-                                                width = 1100
+                                                autosize = TRUE,
+                                                height = 600
                                         )
                                 
                                 plotly_plot_ar <- plotly_build(subpl)
@@ -1764,39 +1865,30 @@ function(input, output, session) {
                                                 # Add the subplot in the list
                                                 subplots[[geo_value]] <- subpl
                                         }
-                                       
                                         
-                                        plot_rows=1
+                                        n_panels <- length(subplots)
                                         
-                                        if(length(subplots)>2){
-                                                
-                                                plot_rows=length(subplots)-1}
+                                        validate(
+                                                need(n_panels > 0, "No data available for the selected countries and period.")
+                                        )
                                         
-                                        if((length(subplots) %% 2) == 0) {
-                                                #Even number of subplots
-                                                plot_rows=length(subplots)/2
-                                        } else {
-                                                #Odd number of subplots
-                                                plot_rows=(length(subplots)+1)/2
-                                        }
+                                        dims <- subplot_dims(n_panels)
                                         
-                                        # 
-                                        # Create layout for the frame graph, size depending on number of selected countries
-                                        layout <- plotly::subplot(subplots, nrows = plot_rows, titleX=TRUE, shareX=TRUE,titleY=TRUE,shareY=TRUE)
-                                        
-                                        # Customize the legend text with word-wrapping
-                                        layout <- layout %>%
+                                        layout <- plotly::subplot(
+                                                subplots,
+                                                nrows = dims$nrows,
+                                                titleX = TRUE,
+                                                shareX = TRUE,
+                                                titleY = TRUE,
+                                                shareY = TRUE
+                                        ) %>%
                                                 layout(
+                                                        autosize = TRUE,
+                                                        height = dims$total_height,
                                                         font = list(size = 11),
                                                         legend.traceorder = "reversed"
                                                 )
                                         
-                                        if(length(subplots)>2){
-                                                layout <- layout %>% layout(height = plot_rows*300,width=1100)
-                                        }
-                                        if(length(subplots)<=2){
-                                                layout <- layout %>% layout(height = plot_rows*475,width=1100)
-                                        }
                                         
                                         
                                         # Create the frame graph
@@ -1958,31 +2050,25 @@ function(input, output, session) {
                                         subplots[[period_label]] <- subpl
                                 }
                                 
-                                plot_rows <- if ((length(subplots) %% 2) == 0) {
-                                        length(subplots) / 2
-                                } else {
-                                        (length(subplots) + 1) / 2
-                                }
+                                n_panels <- length(subplots)
+                                dims <- subplot_dims(n_panels)
                                 
                                 layout <- plotly::subplot(
                                         subplots,
-                                        nrows = plot_rows,
+                                        nrows = dims$nrows,
                                         titleX = TRUE,
                                         shareX = FALSE,
                                         titleY = TRUE,
                                         shareY = TRUE
                                 ) %>%
                                         layout(
+                                                autosize = TRUE,
+                                                height = dims$total_height,
                                                 font = list(size = 11),
                                                 legend.traceorder = "reversed"
                                         )
                                 
-                                if (length(subplots) > 2) {
-                                        layout <- layout %>% layout(height = plot_rows * 300, width = 1100)
-                                }
-                                if (length(subplots) <= 2) {
-                                        layout <- layout %>% layout(height = plot_rows * 475, width = 1100)
-                                }
+                               
                                 
                                 plotly_plot_mr <- plotly_build(layout)
                                 plotly_plot_mr$x$attrs$legend$x$class <- "plot-container"
@@ -2011,9 +2097,6 @@ function(input, output, session) {
                                         
                                         bar_data <- filtered_data %>%
                                                 filter(!is.na(code_label_wrapped))
-                                        
-                                        # Filter unique time values for the x-axis tick labels
-                                        x_axis_tick_labels <- unique(filtered_data$time)
                                         
                                         # Filter unique time values for the x-axis tick labels
                                         x_axis_tick_labels <- unique(filtered_data$time)
@@ -2083,48 +2166,37 @@ function(input, output, session) {
                                         
                                         # Add the subplot in the list
                                         subplots[[geo_value]] <- subpl
+                                }
+                                
+                                n_panels <- length(subplots)
+                                
+                                if (n_panels > 0) {
+                                        
+                                        dims <- subplot_dims(n_panels)
+                                        
+                                        layout <- plotly::subplot(
+                                                subplots,
+                                                nrows = dims$nrows,
+                                                titleX = TRUE,
+                                                shareX = TRUE,
+                                                titleY = TRUE,
+                                                shareY = TRUE
+                                        ) %>%
+                                                layout(
+                                                        autosize = TRUE,
+                                                        height = dims$total_height,
+                                                        font = list(size = 11),
+                                                        legend.traceorder = "reversed"
+                                                )
+                                        
+                                        plotly_plot_mr <- plotly_build(layout)
+                                        plotly_plot_mr$x$attrs$legend$x$class <- "plot-container"
+                                        
+                                        return(plotly_plot_mr)
                                 }}
                                 
                                 
-                                plot_rows=1
-                                
-                                if(length(subplots)>2){
-                                        
-                                        plot_rows=length(subplots)-1}
-                                
-                                if((length(subplots) %% 2) == 0) {
-                                        #Even number of subplots
-                                        plot_rows=length(subplots)/2
-                                } else {
-                                        #Odd number of subplots
-                                        plot_rows=(length(subplots)+1)/2
-                                }
-                                
-                                # 
-                                # Create layout for the frame graph, size depending on number of selected countries
-                                layout <- plotly::subplot(subplots, nrows = plot_rows, titleX=TRUE, shareX=TRUE,titleY=TRUE,shareY=TRUE)
-                                
-                                # Customize the legend text with word-wrapping
-                                layout <- layout %>% layout(legend.text = geo_value,font = list(size = 11), legend.traceorder = "reversed")
-                                
-                                if(length(subplots)>2){
-                                        layout <- layout %>% layout(height = plot_rows*300,width=1100)
-                                }
-                                if(length(subplots)<=2){
-                                        layout <- layout %>% layout(height = plot_rows*475,width=1100)
-                                }
-                                
-                                
-                                # Create the frame graph
-                                plotly_plot_mr <- plotly_build(layout)
-                                
-                                # Add the class "plot-container" to the labels box
-                                plotly_plot_mr$x$attrs$legend$x$class <- "plot-container"
-                                
-                                #Reset the new_plot_ar_data variable to ensure that plot is not shown unless new data is available
-                                
-                                
-                                return(plotly_plot_mr)
+                               
                                 
                         }
                 })
@@ -2239,41 +2311,33 @@ function(input, output, session) {
                                         subplots[[geo_value]] <- subpl
                                 }
                                 
-                                plot_rows=1
-                                
-                                if(length(subplots)>2){
+                                if (length(subplots) > 0) {
                                         
-                                        plot_rows=length(subplots)-1}
-                                
-                                if((length(subplots) %% 2) == 0) {
-                                        #Even number of subplots
-                                        plot_rows=length(subplots)/2
-                                } else {
-                                        #Odd number of subplots
-                                        plot_rows=(length(subplots)+1)/2
-                                }
-                                
-                                # 
-                                # Create layout for the frame graph, size depending on number of selected countries
-                                if(length(subplots)>0){
-                                        frame_layout <- plotly::subplot(subplots, nrows = plot_rows, titleX=TRUE, shareX=TRUE,titleY=TRUE,shareY=TRUE)
-                                }
-                                
-                                if(length(subplots)>2){
-                                        frame_layout <- frame_layout %>% layout(height = plot_rows*300,width=1100)
-                                }
-                                if(length(subplots)<=2 && (length(subplots)>0)){
-                                        frame_layout <- frame_layout %>% layout(height = plot_rows*475,width=1100)
-                                }
-                                
-                                # Create the frame graph
-                                if(length(subplots)>0){
-                                        plotly_plot_se <- plotly_build(frame_layout)
-                                        # Add the class "plot-container" to the labels box
+                                        n_panels <- length(subplots)
+                                        dims <- subplot_dims(n_panels)
                                         
+                                        layout <- plotly::subplot(
+                                                subplots,
+                                                nrows = dims$nrows,
+                                                titleX = TRUE,
+                                                shareX = TRUE,
+                                                titleY = TRUE,
+                                                shareY = TRUE
+                                        ) %>%
+                                                layout(
+                                                        autosize = TRUE,
+                                                        height = dims$total_height,
+                                                        font = list(size = 11),
+                                                        legend.traceorder = "reversed"
+                                                )
+                                        
+                                        plotly_plot_se <- plotly_build(layout)
                                         plotly_plot_se$x$attrs$legend$x$class <- "plot-container"
+                                        
                                         return(plotly_plot_se)
                                 }
+                                
+                                
                                 
                         }
                 })
@@ -2380,7 +2444,12 @@ function(input, output, session) {
                                                 )
                                 }
                                 
-                                y_label <- paste("Index", input$select_years, "=100")
+                                y_label <- if (isTRUE(input$index_adjust_total)) {
+                                        paste("Relative price index", input$select_years, "=100")
+                                } else {
+                                        paste("Index", input$select_years, "=100")
+                                }
+                                
                                 plotly_plot <- plotly_plot %>% 
                                         layout(
                                                 yaxis = list(
@@ -2414,6 +2483,13 @@ function(input, output, session) {
                                 
                                 # Create the explanatory text
                                 plot_title <- paste("Price development for", coicop_values)
+                                
+                                if (isTRUE(input$index_adjust_total)) {
+                                        plot_title <- paste0(
+                                                plot_title,
+                                                " adjusted for total inflation (all-items HICP)"
+                                        )
+                                }
                                 
                                 # Add word-wrapping
                                 plot_title <- gsub("(.{1,70})(\\s+|$)", "\\1\n", plot_title)
