@@ -213,14 +213,21 @@ function(input, output, session) {
 
                 coicops_selected <- eurostat_coicop_code(input$coicops)
 
+                adjust_total <- isTRUE(input$index_adjust_total)
+                adjust_eu27 <- isTRUE(input$index_adjust_eu27) && !("EU" %in% input$countries)
+
                 validate(
                         need(
-                                !(isTRUE(input$index_adjust_total) && "TOTAL" %in% coicops_selected),
+                                !(adjust_total && adjust_eu27),
+                                "Please choose either the total-inflation adjustment or the EU27 adjustment, not both."
+                        ),
+                        need(
+                                !(adjust_total && "TOTAL" %in% coicops_selected),
                                 "The total-inflation adjustment is only meaningful for lower-level aggregates. Please remove all-items HICP from the selected product categories."
                         )
                 )
 
-                coicops_to_fetch <- if (isTRUE(input$index_adjust_total)) {
+                coicops_to_fetch <- if (adjust_total) {
                         union(coicops_selected, "TOTAL")
                 } else {
                         coicops_selected
@@ -233,6 +240,9 @@ function(input, output, session) {
                         character(0)
                 }
                 countries_to_fetch <- union(selected_countries, backdrop_countries)
+                if (adjust_eu27) {
+                        countries_to_fetch <- union(countries_to_fetch, "EU")
+                }
 
                 tryCatch({
                         data_list <- list()
@@ -271,8 +281,14 @@ function(input, output, session) {
 
         selected_data <- reactive({
                 req(hikp_data())
+
+                selected_countries_for_periods <- input$countries
+                if (isTRUE(input$index_adjust_eu27) && !("EU" %in% input$countries)) {
+                        selected_countries_for_periods <- union(selected_countries_for_periods, "EU")
+                }
+
                 data <- hikp_data() %>%
-                        filter(geo %in% input$countries)
+                        filter(geo %in% selected_countries_for_periods)
 
                 data_no_na <- data %>%
                         filter(!is.na(values), substr(time, 1, 3) == "Jan" | substr(time, 1, 3) == "Dec")
@@ -327,12 +343,52 @@ function(input, output, session) {
                 }
         })
 
+        observeEvent(input$index_adjust_total, {
+                if (isTRUE(input$index_adjust_total) && isTRUE(input$index_adjust_eu27)) {
+                        updateCheckboxInput(session, "index_adjust_eu27", value = FALSE)
+                        showNotification(
+                                "The total-inflation adjustment and the EU27 adjustment cannot be combined.",
+                                type = "message"
+                        )
+                }
+        }, ignoreInit = TRUE)
+
+        observeEvent(input$index_adjust_eu27, {
+                if (isTRUE(input$index_adjust_eu27) && isTRUE(input$index_adjust_total)) {
+                        updateCheckboxInput(session, "index_adjust_total", value = FALSE)
+                        showNotification(
+                                "The EU27 adjustment and the total-inflation adjustment cannot be combined.",
+                                type = "message"
+                        )
+                }
+        }, ignoreInit = TRUE)
+
+        observeEvent(input$countries, {
+                if ("EU" %in% input$countries && isTRUE(input$index_adjust_eu27)) {
+                        updateCheckboxInput(session, "index_adjust_eu27", value = FALSE)
+                        showNotification(
+                                "The EU27 adjustment is not available when EU27 itself is selected as a country.",
+                                type = "message"
+                        )
+                }
+        }, ignoreInit = TRUE)
+
         plot_data <- eventReactive(input$rebase, {
                 req(hikp_data(), input$select_years)
                 data <- hikp_data()
                 coicops_selected <- eurostat_coicop_code(input$coicops)
 
-                if (isTRUE(input$index_adjust_total)) {
+                adjust_total <- isTRUE(input$index_adjust_total)
+                adjust_eu27 <- isTRUE(input$index_adjust_eu27) && !("EU" %in% input$countries)
+
+                validate(
+                        need(
+                                !(adjust_total && adjust_eu27),
+                                "Please choose either the total-inflation adjustment or the EU27 adjustment, not both."
+                        )
+                )
+
+                if (adjust_total) {
                         total_data <- data %>%
                                 filter(coicop18 == "TOTAL") %>%
                                 select(geo, time, measure, total_values = values)
@@ -342,11 +398,26 @@ function(input, output, session) {
                                 left_join(total_data, by = c("geo", "time", "measure")) %>%
                                 mutate(
                                         original_values = values,
+                                        adjustment = "Country aggregate / country all-items index",
                                         values = if_else(!is.na(values) & !is.na(total_values) & total_values != 0, values / total_values * 100, NA_real_)
+                                )
+                } else if (adjust_eu27) {
+                        eu27_data <- data %>%
+                                filter(geo == "EU", coicop18 %in% coicops_selected) %>%
+                                select(coicop18, time, measure, eu27_values = values)
+
+                        data <- data %>%
+                                filter(coicop18 %in% coicops_selected, geo != "EU") %>%
+                                left_join(eu27_data, by = c("coicop18", "time", "measure")) %>%
+                                mutate(
+                                        original_values = values,
+                                        adjustment = "Country aggregate / EU27 aggregate",
+                                        values = if_else(!is.na(values) & !is.na(eu27_values) & eu27_values != 0, values / eu27_values * 100, NA_real_)
                                 )
                 } else {
                         data <- data %>%
-                                filter(coicop18 %in% coicops_selected)
+                                filter(coicop18 %in% coicops_selected) %>%
+                                mutate(adjustment = "None")
                 }
 
                 if (input$period_type == "Full year") {
@@ -384,7 +455,13 @@ function(input, output, session) {
                         req(plot_data())
                         data <- plot_data()
 
+                        adjust_eu27 <- isTRUE(input$index_adjust_eu27) && !("EU" %in% input$countries)
+
                         selected_countries <- input$countries
+                        if (adjust_eu27) {
+                                selected_countries <- setdiff(selected_countries, "EU")
+                        }
+
                         backdrop_countries <- if (isTRUE(input$index_backdrop_eu)) {
                                 setdiff(country_groups[["EU"]], selected_countries)
                         } else {
@@ -455,6 +532,8 @@ function(input, output, session) {
 
                         y_label <- if (isTRUE(input$index_adjust_total)) {
                                 paste("Relative price index", input$select_years, "=100")
+                        } else if (adjust_eu27) {
+                                paste("Index relative to EU27", input$select_years, "=100")
                         } else {
                                 paste("Index", input$select_years, "=100")
                         }
@@ -469,7 +548,9 @@ function(input, output, session) {
                         plot_title <- paste("Price development for", coicop_values)
 
                         if (isTRUE(input$index_adjust_total)) {
-                                plot_title <- paste0(plot_title, " adjusted for total inflation (all-items HICP)")
+                                plot_title <- paste0(plot_title, " adjusted for total inflation (all-items selected index)")
+                        } else if (adjust_eu27) {
+                                plot_title <- paste0(plot_title, " relative to the corresponding EU27 index")
                         }
                         plot_title <- gsub("(.{1,70})(\\s+|$)", "\\1\n", plot_title)
 
@@ -506,11 +587,17 @@ function(input, output, session) {
                 coicops <- eurostat_coicop_code(input$coicop_w)
                 result <- unique(filtered_data$coicop18_code)
                 result <- result[!is.na(result)]
-                if (length(result) == 0) result <- coicops
+
+                if (length(result) == 0) {
+                        result <- coicops
+                }
 
                 data <- get_eurostat(
                         "prc_hicp_iw",
-                        filters = list(geo = input$countries_w, coicop18 = result),
+                        filters = list(
+                                geo = input$countries_w,
+                                coicop18 = result
+                        ),
                         update_cache = TRUE
                 )
 
@@ -535,18 +622,25 @@ function(input, output, session) {
                 min_years <- data_no_na %>%
                         group_by(geo, coicop18) %>%
                         summarise(min_year = min(time), .groups = "drop")
+
                 first_non_na_year <- min_years %>%
                         summarise(first_common_year = max(min_year), .groups = "drop") %>%
                         pull(first_common_year)
+
                 data <- filter(data, time >= max(first_non_na_year))
 
                 label_set_w <- selected_label_set(input$classification_w)
+
                 data %>%
                         left_join(label_set_w, by = c("coicop18" = "coicop18_code")) %>%
                         mutate(
                                 classification = input$classification_w,
                                 selected_aggregate = input$coicop_w,
-                                code_label_wrapped = ifelse(is.na(code_label), NA_character_, wrap_legend(code_label, width = 42))
+                                code_label_wrapped = ifelse(
+                                        is.na(code_label),
+                                        NA_character_,
+                                        wrap_legend(code_label, width = 42)
+                                )
                         )
         })
 
@@ -657,18 +751,35 @@ function(input, output, session) {
                                         filtered_data <- time_filtered_data[time_filtered_data$year == year_value, ]
                                         filtered_data$values <- ifelse(is.na(filtered_data$values), 0, filtered_data$values)
 
-                                        if (input$coicop_w == "CP00") {
-                                                sort_code <- if (input$classification_w == "ecoicop" && "CP01" %in% unique(filtered_data$coicop18)) {
-                                                        "CP01"
-                                                } else {
-                                                        sort(unique(as.character(filtered_data$coicop18)))[1]
-                                                }
-
-                                                sort_data <- filtered_data %>%
-                                                        filter(coicop18 == sort_code) %>%
+                                        # Sort countries in the "one graph per year" view.
+                                        #
+                                        # For CP00, total HICP weight is always 1000, so it cannot be used
+                                        # as a sorting variable. Instead, use a meaningful child aggregate:
+                                        # - ECOICOP ver. 2: CP01
+                                        # - Special aggregates: FOOD
+                                        # - Administered prices: APF
+                                        
+                                        sort_code <- case_when(
+                                                input$classification_w == "sa" ~ "FOOD",
+                                                input$classification_w == "ap" ~ "APF",
+                                                input$classification_w == "ecoicop" & input$coicop_w == "CP00" ~ "CP01",
+                                                TRUE ~ NA_character_
+                                        )
+                                        
+                                        if (!is.na(sort_code)) {
+                                                
+                                                sort_data <- hikp_w_data() %>%
+                                                        mutate(year = as.numeric(format(time, "%Y"))) %>%
+                                                        filter(
+                                                                year == year_value,
+                                                                coicop18 == sort_code,
+                                                                geo %in% unique(filtered_data$geo)
+                                                        ) %>%
                                                         group_by(geo) %>%
                                                         summarise(sort_weight = sum(values, na.rm = TRUE), .groups = "drop")
+                                                
                                         } else {
+                                                
                                                 sort_data <- filtered_data %>%
                                                         group_by(geo) %>%
                                                         summarise(sort_weight = sum(values, na.rm = TRUE), .groups = "drop")
@@ -1746,9 +1857,19 @@ function(input, output, session) {
                 content = function(con) {
                         data <- plot_data() %>%
                                 filter(geo %in% input$countries)
-                        first_non_na_year <- min(data$time[!is.na(data$values)])
-                        data <- filter(data, time >= first_non_na_year)
-                        ddata <- data %>% select(measure, coicop18, geo, time, values, newbase)
+
+                        if (nrow(data) == 0) {
+                                ddata <- data
+                        } else {
+                                first_non_na_year <- min(data$time[!is.na(data$values)])
+                                data <- filter(data, time >= first_non_na_year)
+                                ddata <- data %>%
+                                        select(any_of(c(
+                                                "measure", "adjustment", "coicop18", "geo", "time",
+                                                "original_values", "total_values", "eu27_values", "values", "newbase"
+                                        )))
+                        }
+
                         write.csv(ddata, con, row.names = FALSE)
                 }
         )
@@ -1760,7 +1881,8 @@ function(input, output, session) {
                 content = function(con_w) {
                         data <- hikp_w_data()
                         data$time <- substr(data$time, 1, 4)
-                        ddata <- data %>% select(classification, selected_aggregate, coicop18, code_label, geo, time, values)
+                        ddata <- data %>%
+                                select(classification, selected_aggregate, coicop18, code_label, geo, time, values)
                         write.csv(ddata, con_w, row.names = FALSE)
                 }
         )

@@ -190,8 +190,8 @@ ui <- fluidPage(
                                 class = "app-tab-page",
                                 tab_hero(
                                         "Index",
-                                        "Compare HICP and HICP-CT index developments across countries and product categories. Rebase series to a common reference period and optionally adjust lower-level indices for all-items inflation.",
-                                        badges = c("HICP", "HICP-CT", "Rebasing", "Relative price index")
+                                        "Compare HICP and HICP-CT index developments across countries and product categories. Rebase series to a common reference period, adjust lower-level indices for all-items inflation or compare selected country indices with the corresponding EU27 index.",
+                                        badges = c("HICP", "HICP-CT", "Rebasing", "Relative price index", "EU27 comparison")
                                 ),
                                 fluidRow(
                                         column(
@@ -236,12 +236,29 @@ ui <- fluidPage(
                                                                         label = tags$span(
                                                                                 class = "info-label",
                                                                                 title = paste(
-                                                                                        "Divides each selected lower-level index by the all-items HICP",
-                                                                                        "index for the same country, month and measure, then multiplies by 100."
+                                                                                        "Divides each selected lower-level index by the all-items index",
+                                                                                        "for the same country, month and measure, then multiplies by 100.",
+                                                                                        "This option cannot be combined with the EU27 adjustment."
                                                                                 ),
                                                                                 "Adjust lower level index with total inflation"
                                                                         ),
                                                                         value = FALSE
+                                                                ),
+                                                                conditionalPanel(
+                                                                        condition = "!input.countries || input.countries.indexOf('EU') == -1",
+                                                                        checkboxInput(
+                                                                                "index_adjust_eu27",
+                                                                                label = tags$span(
+                                                                                        class = "info-label",
+                                                                                        title = paste(
+                                                                                                "Divides each selected country index by the corresponding EU index",
+                                                                                                "for the same product category, month and measure, then multiplies by 100.",
+                                                                                                "This option is hidden when EU is selected as a country and cannot be combined with the total-inflation adjustment."
+                                                                                        ),
+                                                                                        "Adjust selected aggregate with EU index"
+                                                                                ),
+                                                                                value = FALSE
+                                                                        )
                                                                 )
                                                         ),
                                                         actionButton("update", "Retrieve data", class = "primary-action-btn"),
@@ -547,7 +564,7 @@ ui <- fluidPage(
                                                                 ),
                                                                 selectInput(
                                                                         "coicop_w",
-                                                                        "Select product category or aggregate",
+                                                                        "Select product category",
                                                                         choices = setNames(label_set$coicop18_code, label_set$code_label),
                                                                         multiple = FALSE
                                                                 ),
@@ -585,7 +602,7 @@ ui <- fluidPage(
                                         tags$div(
                                                 class = "help-hero",
                                                 tags$span(class = "help-badge", "User guide"),
-                                                tags$h2("HICP Voyager 2.4"),
+                                                tags$h2("HICP Voyager 2.3"),
                                                 tags$p(
                                                         "HICP Voyager is an interactive dashboard for exploring European consumer price statistics. ",
                                                         "The app lets you analyse HICP indices, HICP-CT indices, monthly and annual rates of change, ",
@@ -778,14 +795,13 @@ ui <- fluidPage(
                                                         class = "help-card",
                                                         tags$h3("Weights"),
                                                         tags$p(
-                                                                "The Weights tab shows HICP expenditure weights for selected countries and aggregates. ",
-                                                                "You can choose ECOICOP, special aggregates or administered prices, using the same aggregate lists as in the contribution tabs."
+                                                                "The Weights tab shows HICP expenditure weights for selected countries and product categories. It can use ECOICOP, special aggregates or administered prices as the selected classification."
                                                         ),
                                                         tags$ul(
-                                                                tags$li(tags$strong("Classification:"), " choose ECOICOP, special aggregates or administered prices."),
                                                                 tags$li(tags$strong("One graph per year:"), " compares countries within selected years."),
                                                                 tags$li(tags$strong("One graph per country:"), " shows the development of weights over time for each country."),
-                                                                tags$li("Weights are shown in per mille, where total HICP equals 1000.")
+                                                                tags$li("Weights are shown in per mille, where all-items HICP equals 1000."),
+                                                                tags$li("The classification selector controls which hierarchy is used for the selected aggregate and its direct lower-level components.")
                                                         ),
                                                         tags$p(
                                                                 class = "help-kpi",
@@ -800,8 +816,7 @@ ui <- fluidPage(
                                                 class = "help-card",
                                                 tags$p(
                                                         "The M/M-1, M/M-12 and Weights tabs allow you to choose between three classification structures. ",
-                                                        "For contributions, the same calculation logic is used for all three; only the hierarchy of components changes. ",
-                                                        "For weights, the selected hierarchy determines which aggregate weights are retrieved and displayed."
+                                                        "For M/M-1 and M/M-12, the same contribution logic is used for all three; only the hierarchy of components changes. For Weights, the same hierarchy controls which direct lower-level weights are displayed."
                                                 ),
                                                 tags$table(
                                                         class = "help-table",
@@ -870,8 +885,7 @@ ui <- fluidPage(
                                                         tags$li(tags$strong("TOT_X_AP:"), " Overall index excluding administered prices.")
                                                 ),
                                                 tags$p(
-                                                        "When CP00 is selected with contribution target set to selected higher aggregate, the contributions from APF, APM and TOT_X_AP are calculated analogously to the other special-aggregate hierarchies. ",
-                                                        "On the Weights tab, the same hierarchy is used to display the corresponding administered-price weights."
+                                                        "When CP00 is selected with contribution target set to selected higher aggregate, the contributions from APF, APM and TOT_X_AP are calculated analogously to the other special-aggregate hierarchies."
                                                 ),
 
                                                 tags$hr(),
