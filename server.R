@@ -29,6 +29,9 @@ function(input, output, session) {
                 observeEvent(input[[paste0(prefix, "_balkan")]], {
                         updateSelectInput(session, input_id, selected = country_groups[["Balkan"]])
                 })
+                observeEvent(input[[paste0(prefix, "_baltic")]], {
+                        updateSelectInput(session, input_id, selected = country_groups[["Baltic"]])
+                })
                 observeEvent(input[[paste0(prefix, "_central")]], {
                         updateSelectInput(session, input_id, selected = country_groups[["Central"]])
                 })
@@ -110,15 +113,68 @@ function(input, output, session) {
                 if (length(y) == 0) NA_real_ else y[1]
         }
 
-        finite_range <- function(x, default = c(-1, 1), pad = 1.05) {
+        finite_range <- function(x, default = c(-1, 1), pad = 0.06, min_padding = NULL) {
                 x <- x[is.finite(x)]
                 if (length(x) == 0) return(default)
+
                 mn <- min(x, na.rm = TRUE)
                 mx <- max(x, na.rm = TRUE)
+
                 if (mn == mx) {
-                        return(c(mn - 1, mx + 1))
+                        padding <- if (!is.null(min_padding)) min_padding else max(abs(mn) * pad, 1)
+                        return(c(mn - padding, mx + padding))
                 }
-                c(ifelse(mn == 0, mn, mn * pad), ifelse(mx == 0, mx, mx * pad))
+
+                # Expand the range around the observed min and max instead of
+                # multiplying the end points. Multiplication works poorly for
+                # seasonality indices around 100 because it can move the lower
+                # limit above the observed minimum and visually clip the chart.
+                pad_fraction <- ifelse(pad > 1, pad - 1, pad)
+                padding <- (mx - mn) * pad_fraction
+                if (!is.null(min_padding)) {
+                        padding <- max(padding, min_padding)
+                }
+
+                c(mn - padding, mx + padding)
+        }
+
+        visible_y_range <- function(x, default = c(-1, 1), pad_fraction = 0.08, min_pad = 0.08) {
+                x <- x[is.finite(x)]
+                if (length(x) == 0) return(default)
+
+                mn <- min(c(x, 0), na.rm = TRUE)
+                mx <- max(c(x, 0), na.rm = TRUE)
+
+                if (mn == mx) {
+                        pad <- max(abs(mx) * pad_fraction, min_pad)
+                        return(c(mn - pad, mx + pad))
+                }
+
+                pad <- max((mx - mn) * pad_fraction, min_pad)
+                c(mn - pad, mx + pad)
+        }
+
+        stacked_component_range <- function(data, value_col, group_cols) {
+                if (nrow(data) == 0 || !(value_col %in% names(data))) {
+                        return(data.frame(
+                                positive_sum = numeric(0),
+                                negative_sum = numeric(0)
+                        ))
+                }
+
+                tmp <- data
+                tmp$.range_value <- tmp[[value_col]]
+                tmp$.range_value <- ifelse(is.na(tmp$.range_value), 0, tmp$.range_value)
+                tmp$.range_positive <- ifelse(tmp$.range_value > 0, tmp$.range_value, 0)
+                tmp$.range_negative <- ifelse(tmp$.range_value < 0, tmp$.range_value, 0)
+
+                tmp %>%
+                        group_by(across(all_of(group_cols))) %>%
+                        summarise(
+                                positive_sum = sum(.range_positive, na.rm = TRUE),
+                                negative_sum = sum(.range_negative, na.rm = TRUE),
+                                .groups = "drop"
+                        )
         }
 
         subplot_dims <- function(
@@ -147,6 +203,102 @@ function(input, output, session) {
                         panel_height = panel_height,
                         total_height = ceiling(nrows * panel_height)
                 )
+        }
+
+        component_style_map <- function(labels) {
+                labels <- labels[!is.na(labels) & labels != ""]
+                labels <- unique(as.character(labels))
+                labels <- sort(labels)
+
+                if (length(labels) == 0) {
+                        return(data.frame(
+                                label = character(0),
+                                color = character(0),
+                                pattern = character(0),
+                                stringsAsFactors = FALSE
+                        ))
+                }
+
+                # High-contrast colours first. Later entries reuse a nearby hue and
+                # therefore get a subtle pattern overlay. This keeps small charts clean
+                # while still separating components when many similar shades are needed.
+                style_palette <- data.frame(
+                        color = c(
+                                "#0072B2", "#D55E00", "#009E73", "#CC79A7",
+                                "#56B4E9", "#E69F00", "#009FB7", "#7B61A8",
+                                "#3B6EA8", "#C95D63", "#5E8C31", "#B07AA1",
+                                "#2A9D8F", "#A6761D", "#6A4C93", "#8C564B",
+                                "#4E79A7", "#F28E2B", "#59A14F", "#AF7AA1"
+                        ),
+                        pattern = c(
+                                "", "", "", "",
+                                "/", "/", "\\", "\\",
+                                "x", "x", "/", "/",
+                                "-", "-", "+", "+",
+                                ".", ".", "|", "|"
+                        ),
+                        stringsAsFactors = FALSE
+                )
+
+                palette_index <- ((seq_along(labels) - 1) %% nrow(style_palette)) + 1
+
+                data.frame(
+                        label = labels,
+                        color = style_palette$color[palette_index],
+                        pattern = style_palette$pattern[palette_index],
+                        stringsAsFactors = FALSE
+                )
+        }
+
+        add_styled_bar_traces <- function(
+                plot,
+                data,
+                x_col,
+                y_col,
+                style_map,
+                showlegend = TRUE,
+                legend_col = "code_label_wrapped"
+        ) {
+                if (nrow(data) == 0 || nrow(style_map) == 0) return(plot)
+
+                for (label_value in style_map$label) {
+                        trace_data <- data[data[[legend_col]] == label_value & !is.na(data[[legend_col]]), , drop = FALSE]
+                        if (nrow(trace_data) == 0) next
+
+                        style_row <- style_map[match(label_value, style_map$label), , drop = FALSE]
+                        marker_style <- list(
+                                color = style_row$color,
+                                line = list(color = "rgba(255,255,255,0.70)", width = 0.45)
+                        )
+
+                        if (!is.na(style_row$pattern) && style_row$pattern != "") {
+                                marker_style$pattern <- list(
+                                        shape = style_row$pattern,
+                                        fillmode = "overlay",
+                                        fgcolor = "rgba(35,35,35,0.36)",
+                                        bgcolor = style_row$color,
+                                        size = 8,
+                                        solidity = 0.16
+                                )
+                        }
+
+                        plot <- plot %>%
+                                add_trace(
+                                        data = trace_data,
+                                        x = trace_data[[x_col]],
+                                        y = trace_data[[y_col]],
+                                        type = "bar",
+                                        name = label_value,
+                                        legendgroup = label_value,
+                                        showlegend = showlegend,
+                                        legendrank = 100 + match(label_value, style_map$label),
+                                        marker = marker_style,
+                                        hoverinfo = "all",
+                                        inherit = FALSE
+                                )
+                }
+
+                plot
         }
 
         observeEvent(input$classification_mr, {
@@ -703,6 +855,7 @@ function(input, output, session) {
                         validate(need(nrow(time_filtered_data) > 0, "No data available for the selected countries and period."))
 
                         subplots <- list()
+                        component_styles_w <- component_style_map(time_filtered_data$code_label_wrapped)
 
                         if (input$weights_view == "country") {
                                 weight_by_geo <- time_filtered_data %>%
@@ -716,13 +869,12 @@ function(input, output, session) {
                                         filtered_data <- time_filtered_data[time_filtered_data$geo == geo_value, ]
                                         filtered_data$values <- ifelse(is.na(filtered_data$values), 0, filtered_data$values)
 
-                                        subpl <- plot_ly(
+                                        subpl <- add_styled_bar_traces(
+                                                plot_ly(),
                                                 filtered_data,
-                                                x = ~time,
-                                                y = ~values,
-                                                color = ~code_label_wrapped,
-                                                type = "bar",
-                                                legendgroup = ~code_label_wrapped,
+                                                x_col = "time",
+                                                y_col = "values",
+                                                style_map = component_styles_w,
                                                 showlegend = count == 1
                                         ) %>%
                                                 layout(
@@ -797,13 +949,12 @@ function(input, output, session) {
                                         geo_order <- c(geo_order, sort(remaining_geo))
                                         filtered_data$geo <- factor(filtered_data$geo, levels = geo_order)
 
-                                        subpl <- plot_ly(
+                                        subpl <- add_styled_bar_traces(
+                                                plot_ly(),
                                                 filtered_data,
-                                                x = ~geo,
-                                                y = ~values,
-                                                color = ~code_label_wrapped,
-                                                type = "bar",
-                                                legendgroup = ~code_label_wrapped,
+                                                x_col = "geo",
+                                                y_col = "values",
+                                                style_map = component_styles_w,
                                                 showlegend = count == 1
                                         ) %>%
                                                 layout(
@@ -839,7 +990,7 @@ function(input, output, session) {
                                         autosize = TRUE,
                                         height = dims$total_height,
                                         font = list(size = 11),
-                                        legend = list(traceorder = "reversed", font = list(size = 11), x = 1.02, y = 1),
+                                        legend = list(traceorder = "normal", font = list(size = 11), x = 1.02, y = 1),
                                         margin = list(r = 180)
                                 )
 
@@ -1105,18 +1256,21 @@ function(input, output, session) {
                                 )
                         )
 
-                        contr_by_geo <- time_filtered_data %>%
-                                group_by(geo, time) %>%
-                                summarise(sum_value = sum(Contr_j, na.rm = TRUE), .groups = "drop")
-                        mr_00_by_geo <- time_filtered_data %>%
-                                group_by(geo, time) %>%
-                                summarise(
-                                        max_value = max(m_rate_00, na.rm = TRUE),
-                                        min_value = min(m_rate_00, na.rm = TRUE),
-                                        .groups = "drop"
-                                )
-                        y_rng <- finite_range(c(contr_by_geo$sum_value, mr_00_by_geo$max_value, mr_00_by_geo$min_value, 0), default = c(-1, 1), pad = 1.05)
-                        y_rng <- c(y_rng[1] - 1, y_rng[2] + 1)
+                        stacked_range_mr <- stacked_component_range(
+                                time_filtered_data,
+                                value_col = "Contr_j",
+                                group_cols = c("geo", "time")
+                        )
+                        mr_00_values <- time_filtered_data %>%
+                                filter(!is.na(m_rate_00)) %>%
+                                distinct(geo, time, m_rate_00)
+                        y_rng <- visible_y_range(
+                                c(stacked_range_mr$positive_sum, stacked_range_mr$negative_sum, mr_00_values$m_rate_00, 0),
+                                default = c(-1, 1),
+                                pad_fraction = 0.08,
+                                min_pad = 0.08
+                        )
+                        component_styles_mr <- component_style_map(time_filtered_data$code_label_wrapped)
 
                         if (input$mr_view == "period") {
                                 subplots <- list()
@@ -1146,13 +1300,12 @@ function(input, output, session) {
 
                                         bar_data <- filtered_data %>% filter(!is.na(code_label_wrapped))
 
-                                        subpl <- plot_ly(
+                                        subpl <- add_styled_bar_traces(
+                                                plot_ly(),
                                                 bar_data,
-                                                x = ~geo_chr,
-                                                y = ~Contr_j,
-                                                color = ~code_label_wrapped,
-                                                legendgroup = ~code_label_wrapped,
-                                                type = "bar",
+                                                x_col = "geo_chr",
+                                                y_col = "Contr_j",
+                                                style_map = component_styles_mr,
                                                 showlegend = count == 1
                                         )
 
@@ -1171,7 +1324,8 @@ function(input, output, session) {
                                                         inherit = FALSE,
                                                         name = monthly_marker_name,
                                                         marker = list(color = "black", size = 10),
-                                                        showlegend = count == 1
+                                                        showlegend = count == 1,
+                                                        legendrank = 1
                                                 ) %>%
                                                 layout(
                                                         yaxis = list(range = y_rng, title = y_title),
@@ -1205,7 +1359,7 @@ function(input, output, session) {
                                                 autosize = TRUE,
                                                 height = dims$total_height,
                                                 font = list(size = 11),
-                                                legend = list(traceorder = "reversed")
+                                                legend = list(traceorder = "normal")
                                         )
 
                                 plotly_plot_mr <- plotly_build(layout)
@@ -1232,13 +1386,12 @@ function(input, output, session) {
                                                 tickformat = "%Y %B"
                                         )
 
-                                        subpl <- plot_ly(
+                                        subpl <- add_styled_bar_traces(
+                                                plot_ly(),
                                                 bar_data,
-                                                x = ~time,
-                                                y = ~Contr_j,
-                                                color = ~code_label_wrapped,
-                                                type = "bar",
-                                                legendgroup = ~code_label_wrapped,
+                                                x_col = "time",
+                                                y_col = "Contr_j",
+                                                style_map = component_styles_mr,
                                                 showlegend = count == 1
                                         ) %>%
                                                 layout(
@@ -1272,9 +1425,10 @@ function(input, output, session) {
                                                         inherit = FALSE,
                                                         name = monthly_marker_name,
                                                         marker = list(color = "black", size = 10),
-                                                        showlegend = count == 1
+                                                        showlegend = count == 1,
+                                                        legendrank = 1
                                                 ) %>%
-                                                layout(xaxis = x_axis_layout, yaxis = list(title = y_title))
+                                                layout(xaxis = x_axis_layout, yaxis = list(range = y_rng, title = y_title))
 
                                         subplots[[geo_value]] <- subpl
                                 }
@@ -1292,7 +1446,7 @@ function(input, output, session) {
                                                 autosize = TRUE,
                                                 height = dims$total_height,
                                                 font = list(size = 11),
-                                                legend = list(traceorder = "reversed")
+                                                legend = list(traceorder = "normal")
                                         )
 
                                 plotly_plot_mr <- plotly_build(layout)
@@ -1508,23 +1662,31 @@ function(input, output, session) {
 
                         time_filtered_data$sign <- ifelse(time_filtered_data$Contr_j > 0, 1, ifelse(time_filtered_data$Contr_j < 0, -1, 1))
 
-                        contr_by_geo <- time_filtered_data %>%
-                                group_by(geo, time, sign) %>%
-                                summarise(sum_value = sum(Contr_j, na.rm = TRUE), .groups = "drop")
-
-                        ar_00_by_geo <- time_filtered_data %>%
-                                group_by(geo, time) %>%
-                                summarise(
-                                        max_value = max(ann_rate_00, na.rm = TRUE),
-                                        min_value = min(ann_rate_00, na.rm = TRUE),
-                                        .groups = "drop"
-                                )
+                        stacked_range_ar <- stacked_component_range(
+                                time_filtered_data,
+                                value_col = "Contr_j",
+                                group_cols = c("geo", "time")
+                        )
+                        ar_00_values <- time_filtered_data %>%
+                                filter(!is.na(ann_rate_00)) %>%
+                                distinct(geo, time, ann_rate_00)
 
                         if (input$contribution_type_ar == "selected higher aggregate") {
-                                y_rng <- finite_range(c(contr_by_geo$sum_value, ar_00_by_geo$max_value, ar_00_by_geo$min_value, 0))
+                                y_rng <- visible_y_range(
+                                        c(stacked_range_ar$positive_sum, stacked_range_ar$negative_sum, ar_00_values$ann_rate_00, 0),
+                                        default = c(-1, 1),
+                                        pad_fraction = 0.08,
+                                        min_pad = 0.20
+                                )
                         } else {
-                                y_rng <- finite_range(c(contr_by_geo$sum_value, 0))
+                                y_rng <- visible_y_range(
+                                        c(stacked_range_ar$positive_sum, stacked_range_ar$negative_sum, 0),
+                                        default = c(-1, 1),
+                                        pad_fraction = 0.08,
+                                        min_pad = 0.20
+                                )
                         }
+                        component_styles_ar <- component_style_map(time_filtered_data$code_label_wrapped)
 
                         if (input$ar_view == "period") {
                                 period_label <- input$select_period_ar
@@ -1540,13 +1702,12 @@ function(input, output, session) {
                                 filtered_data <- filtered_data %>% mutate(geo_chr = factor(geo_chr, levels = geo_order))
                                 bar_data <- filtered_data %>% filter(!is.na(code_label_wrapped))
 
-                                subpl <- plot_ly(
+                                subpl <- add_styled_bar_traces(
+                                        plot_ly(),
                                         bar_data,
-                                        x = ~geo_chr,
-                                        y = ~Contr_j,
-                                        color = ~code_label_wrapped,
-                                        legendgroup = ~code_label_wrapped,
-                                        type = "bar",
+                                        x_col = "geo_chr",
+                                        y_col = "Contr_j",
+                                        style_map = component_styles_ar,
                                         showlegend = TRUE
                                 )
 
@@ -1566,7 +1727,8 @@ function(input, output, session) {
                                                         inherit = FALSE,
                                                         name = annual_marker_name,
                                                         marker = list(color = "black", size = 10),
-                                                        showlegend = TRUE
+                                                        showlegend = TRUE,
+                                                        legendrank = 1
                                                 )
                                 }
 
@@ -1589,7 +1751,7 @@ function(input, output, session) {
                                                         showarrow = FALSE
                                                 ),
                                                 font = list(size = 11),
-                                                legend = list(traceorder = "reversed"),
+                                                legend = list(traceorder = "normal"),
                                                 autosize = TRUE,
                                                 height = 600
                                         ) %>%
@@ -1608,13 +1770,12 @@ function(input, output, session) {
                                         filtered_data$Contr_j <- ifelse(is.na(filtered_data$Contr_j), 0, filtered_data$Contr_j)
                                         bar_data <- filtered_data %>% filter(!is.na(code_label_wrapped))
 
-                                        subpl <- plot_ly(
+                                        subpl <- add_styled_bar_traces(
+                                                plot_ly(),
                                                 bar_data,
-                                                x = ~time,
-                                                y = ~Contr_j,
-                                                color = ~code_label_wrapped,
-                                                type = "bar",
-                                                legendgroup = ~code_label_wrapped,
+                                                x_col = "time",
+                                                y_col = "Contr_j",
+                                                style_map = component_styles_ar,
                                                 showlegend = count == 1
                                         ) %>%
                                                 layout(
@@ -1650,12 +1811,13 @@ function(input, output, session) {
                                                                 inherit = FALSE,
                                                                 name = annual_marker_name,
                                                                 line = list(color = "black", dash = "dash", width = 1.5),
-                                                                showlegend = count == 1
+                                                                showlegend = count == 1,
+                                                                legendrank = 1
                                                         ) %>%
-                                                        layout(xaxis = list(title = ""), yaxis = list(title = selected_axis_ar))
+                                                        layout(xaxis = list(title = ""), yaxis = list(range = y_rng, title = selected_axis_ar))
                                         } else {
                                                 subpl <- subpl %>%
-                                                        layout(xaxis = list(title = ""), yaxis = list(title = all_items_axis_ar))
+                                                        layout(xaxis = list(title = ""), yaxis = list(range = y_rng, title = all_items_axis_ar))
                                         }
 
                                         subplots[[geo_value]] <- subpl
@@ -1674,7 +1836,7 @@ function(input, output, session) {
                                                 autosize = TRUE,
                                                 height = dims$total_height,
                                                 font = list(size = 11),
-                                                legend = list(traceorder = "reversed")
+                                                legend = list(traceorder = "normal")
                                         )
 
                                 plotly_plot_ar <- plotly_build(layout)
@@ -1777,15 +1939,13 @@ function(input, output, session) {
                         time_filtered_data <- data[data$year %in% input$select_years_se, ]
                         validate(need(nrow(time_filtered_data) > 0, "No data available for the selected years."))
 
-                        ix_by_geo <- time_filtered_data %>%
-                                group_by(geo, time) %>%
-                                summarise(
-                                        max_value = max(index_dec_prv_yr, na.rm = TRUE),
-                                        min_value = min(index_dec_prv_yr, na.rm = TRUE),
-                                        .groups = "drop"
-                                )
-                        y_rng <- finite_range(c(ix_by_geo$max_value, ix_by_geo$min_value), default = c(75, 125))
-                        y_rng <- c(y_rng[1] - 2, y_rng[2] + 2)
+                        visible_y_values <- time_filtered_data$index_dec_prv_yr
+                        y_rng <- finite_range(
+                                visible_y_values,
+                                default = c(98, 102),
+                                pad = 0.08,
+                                min_padding = 0.75
+                        )
 
                         subplots <- list()
                         count <- 0
@@ -1848,6 +2008,16 @@ function(input, output, session) {
                                 )
 
                         plotly_plot_se <- plotly_build(layout)
+
+                        # Enforce the same tight range on all subplot y-axes after
+                        # plotly has combined the individual panels. This avoids
+                        # Plotly's subplot defaults reopening the vertical scale.
+                        yaxis_names <- grep("^yaxis", names(plotly_plot_se$x$layout), value = TRUE)
+                        for (axis_name in yaxis_names) {
+                                plotly_plot_se$x$layout[[axis_name]]$range <- y_rng
+                                plotly_plot_se$x$layout[[axis_name]]$autorange <- FALSE
+                        }
+
                         plotly_plot_se$x$attrs$legend$x$class <- "plot-container"
                         plotly_plot_se
                 })

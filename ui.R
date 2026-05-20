@@ -35,6 +35,7 @@ country_group_buttons <- function(prefix) {
                 actionButton(paste0(prefix, "_med"), "Mediterranean", class = "quick-btn"),
                 actionButton(paste0(prefix, "_nordic"), "Nordic", class = "quick-btn"),
                 actionButton(paste0(prefix, "_balkan"), "Balkan", class = "quick-btn"),
+                actionButton(paste0(prefix, "_baltic"), "Baltic", class = "quick-btn"),
                 br(),
                 actionButton(paste0(prefix, "_central"), "Central", class = "quick-btn"),
                 actionButton(paste0(prefix, "_eastern"), "Eastern", class = "quick-btn"),
@@ -81,19 +82,20 @@ download_panel <- function(condition, download_id) {
 ui <- fluidPage(
         theme = bs_theme(bootswatch = "minty"),
         tags$style(HTML("
+body { background: #fbfdfc; }
 .app-header {
   max-width: 1250px;
-  margin: 14px auto 14px auto;
-  padding: 24px 28px;
-  background: linear-gradient(135deg, #f7fbf9 0%, #eef7f4 100%);
+  margin: 14px auto 12px auto;
+  padding: 22px 28px;
+  background: radial-gradient(circle at top left, rgba(63,143,122,0.10) 0, rgba(63,143,122,0.03) 32%, transparent 58%), linear-gradient(135deg, #f7fbf9 0%, #eef7f4 100%);
   border: 1px solid #dcebe6;
   border-radius: 22px;
-  box-shadow: 0 3px 14px rgba(0,0,0,0.035);
+  box-shadow: 0 5px 18px rgba(32,50,47,0.045);
   color: #263238;
 }
 .app-header-main { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
 .app-kicker { font-size: 12px; font-weight: 700; color: #3f8f7a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px; }
-.app-title { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -0.03em; color: #20322f; }
+.app-title { margin: 0; font-size: 31px; font-weight: 800; letter-spacing: -0.035em; color: #20322f; }
 .app-subtitle { margin-top: 7px; margin-bottom: 0; max-width: 750px; font-size: 15px; line-height: 1.55; color: #526064; }
 .app-header-badges { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .app-version-pill, .app-meta-pill { display: inline-block; border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 700; white-space: nowrap; }
@@ -103,6 +105,7 @@ ui <- fluidPage(
 .navbar .container-fluid, .navbar .container { padding-left: 8px !important; padding-right: 8px !important; }
 .navbar-brand { padding-top: 4px !important; padding-bottom: 4px !important; margin-right: 18px !important; font-weight: 800 !important; color: #20322f !important; }
 .navbar-brand-custom { display: inline-flex; align-items: center; gap: 8px; }
+.navbar-brand-icon-only { gap: 0; }
 .navbar-brand-mark { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 8px; background: #3f8f7a; color: white; font-size: 14px; font-weight: 800; }
 .navbar-nav { gap: 6px; }
 .navbar-nav .nav-link, .navbar-nav > li > a { border-radius: 999px !important; padding: 8px 14px !important; margin: 2px 3px !important; color: #3f4a4d !important; font-size: 14px !important; font-weight: 650 !important; border: 1px solid transparent !important; transition: all 0.15s ease-in-out; }
@@ -118,12 +121,12 @@ ui <- fluidPage(
 .quick-btn-clear { background-color: #fafafa !important; color: #777 !important; border: 1px solid #d6d6d6 !important; border-radius: 8px !important; padding: 6px 12px !important; font-size: 13px !important; box-shadow: none !important; margin-top: 4px; }
 .quick-btn-clear:hover { background-color: #f1f1f1 !important; color: #555 !important; }
 .app-tab-page { max-width: 1250px; margin: 0 auto; padding: 18px 8px 40px 8px; color: #263238; }
-.tab-hero { background: linear-gradient(135deg, #f7fbf9 0%, #eef7f4 100%); border: 1px solid #dcebe6; border-radius: 18px; padding: 20px 26px; margin-bottom: 18px; }
+.tab-hero { background: linear-gradient(135deg, #f8fcfa 0%, #eef7f4 100%); border: 1px solid #dcebe6; border-radius: 18px; padding: 20px 26px; margin-bottom: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.75); }
 .tab-hero h2 { margin-top: 0; margin-bottom: 6px; font-size: 24px; font-weight: 700; }
 .tab-hero p { margin-bottom: 0; font-size: 14px; line-height: 1.55; max-width: 850px; }
 .tab-badges { margin-top: 12px; }
 .tab-badge { display: inline-block; background: #e8f4f0; color: #24584b; border: 1px solid #cfe6dd; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; margin-right: 6px; margin-bottom: 5px; }
-.control-card { background: #ffffff; border: 1px solid #e1e7e5; border-radius: 16px; padding: 16px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.035); margin-bottom: 16px; }
+.control-card { background: #ffffff; border: 1px solid #e1e7e5; border-radius: 16px; padding: 16px 18px; box-shadow: 0 4px 14px rgba(32,50,47,0.045); margin-bottom: 16px; }
 .control-card h3 { margin-top: 0; margin-bottom: 12px; font-size: 17px; font-weight: 700; }
 .control-group { border-top: 1px solid #edf1f0; padding-top: 13px; margin-top: 13px; }
 .control-group:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
@@ -178,9 +181,8 @@ ui <- fluidPage(
         ),
         navbarPage(
                 title = tags$span(
-                        class = "navbar-brand-custom",
-                        tags$span(class = "navbar-brand-mark", "H"),
-                        tags$span("HICP Voyager")
+                        class = "navbar-brand-custom navbar-brand-icon-only",
+                        tags$span(class = "navbar-brand-mark", "H")
                 ),
                 id = "main_tabs",
                 collapsible = TRUE,
@@ -684,7 +686,7 @@ ui <- fluidPage(
                                                         tags$tr(tags$th("Function"), tags$th("Description")),
                                                         tags$tr(
                                                                 tags$td(tags$strong("Country group quick selection")),
-                                                                tags$td("Select predefined groups such as EU, Euro area, Nordic countries, Balkan countries or Benelux.")
+                                                                tags$td("Select predefined groups such as EU, Euro area, Nordic, Baltic, Balkan or Benelux.")
                                                         ),
                                                         tags$tr(
                                                                 tags$td(tags$strong("Custom countries selection")),

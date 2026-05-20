@@ -147,6 +147,7 @@ country_groups <- list(
         ),
         "Mediterranean" = c("EL", "ES", "IT", "PT", "CY", "MT"),
         "Nordic" = c("DK", "FI", "IS", "NO", "SE"),
+        "Baltic" = c("EE", "LV", "LT"),
         "Balkan" = c("AL", "BA", "HR", "ME", "MK", "RS", "SI", "XK"),
         "Central" = c("AT", "CH", "CZ", "DE", "HU", "PL", "SK"),
         "Eastern" = c("BG", "CZ", "EE", "HU", "LT", "LV", "PL", "RO", "SK"),
