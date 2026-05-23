@@ -83,42 +83,42 @@ ui <- fluidPage(
         theme = bs_theme(bootswatch = "minty"),
         tags$head(tags$link(rel = "icon", type = "image/png", href = "app_logo_favicon.png")),
         tags$style(HTML("
-body { background: #f8fbfa; }
+body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%); }
 .app-header {
   max-width: 1250px;
-  margin: 16px auto 12px auto;
-  padding: 18px 24px;
-  background: radial-gradient(circle at top left, rgba(63,143,122,0.09) 0, rgba(63,143,122,0.025) 36%, transparent 62%), linear-gradient(135deg, #f9fcfb 0%, #f1f8f6 100%);
+  margin: 12px auto 10px auto;
+  padding: 15px 22px;
+  background: radial-gradient(circle at top left, rgba(63,143,122,0.075) 0, rgba(63,143,122,0.022) 35%, transparent 62%), linear-gradient(135deg, #f9fcfb 0%, #f3faf7 100%);
   border: 1px solid #dcebe6;
-  border-radius: 20px;
-  box-shadow: 0 4px 16px rgba(32,50,47,0.04);
+  border-radius: 19px;
+  box-shadow: 0 4px 14px rgba(32,50,47,0.035);
   color: #263238;
 }
-.app-header-main { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: nowrap; }
-.app-brand-block { display: flex; align-items: center; gap: 16px; min-width: 0; flex: 1 1 auto; }
+.app-header-main { display: flex; justify-content: space-between; align-items: center; gap: 22px; flex-wrap: nowrap; }
+.app-brand-block { display: flex; align-items: center; gap: 14px; min-width: 0; flex: 1 1 auto; }
 .app-brand-text { min-width: 0; }
 .app-logo-card {
   flex: 0 0 auto;
-  width: 68px;
-  height: 68px;
+  width: 58px;
+  height: 58px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 17px;
-  background: rgba(255,255,255,0.72);
+  border-radius: 15px;
+  background: rgba(255,255,255,0.74);
   border: 1px solid rgba(215,231,226,0.95);
-  box-shadow: 0 7px 18px rgba(32,50,47,0.075);
+  box-shadow: 0 6px 16px rgba(32,50,47,0.065);
   overflow: hidden;
 }
 .app-logo { width: 100%; height: 100%; object-fit: cover; padding: 0; display: block; }
-.app-kicker { font-size: 11.5px; font-weight: 800; color: #3f8f7a; text-transform: uppercase; letter-spacing: 0.11em; margin-bottom: 4px; }
-.app-title { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.035em; color: #20322f; }
-.app-subtitle { margin-top: 7px; margin-bottom: 0; max-width: 780px; font-size: 14.5px; line-height: 1.5; color: #526064; }
+.app-kicker { font-size: 11.5px; font-weight: 800; color: #3f8f7a; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 3px; }
+.app-title { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.035em; color: #20322f; line-height: 1.05; }
+.app-subtitle { margin-top: 6px; margin-bottom: 0; max-width: 780px; font-size: 14.2px; line-height: 1.45; color: #526064; }
 .app-header-badges { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; flex: 0 0 auto; }
 .app-version-pill, .app-meta-pill { display: inline-block; border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .app-version-pill { background: #3f8f7a; color: white; border: 1px solid #337968; }
 .app-meta-pill { background: #ffffff; color: #34514b; border: 1px solid #d7e7e2; }
-.navbar { max-width: 1250px; margin: 0 auto 16px auto !important; padding: 10px 14px !important; background: rgba(255,255,255,0.96) !important; border: 1px solid #e1e7e5 !important; border-radius: 18px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.035); min-height: unset !important; }
+.navbar { max-width: 1250px; margin: 0 auto 14px auto !important; padding: 7px 12px !important; background: rgba(255,255,255,0.97) !important; border: 1px solid #e1e7e5 !important; border-radius: 17px !important; box-shadow: 0 2px 10px rgba(32,50,47,0.035); min-height: unset !important; }
 .navbar .container-fluid, .navbar .container { padding-left: 0 !important; padding-right: 0 !important; }
 .navbar-brand { display: none !important; }
 .navbar-brand-custom { display: inline-flex; align-items: center; gap: 8px; }
@@ -126,33 +126,104 @@ body { background: #f8fbfa; }
 .navbar-logo { display: none; }
 .navbar-brand-mark { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 8px; background: #3f8f7a; color: white; font-size: 14px; font-weight: 800; }
 .navbar-nav { gap: 6px; }
-.navbar-nav .nav-link, .navbar-nav > li > a { border-radius: 999px !important; padding: 8px 16px !important; margin: 2px 3px !important; color: #3f4a4d !important; font-size: 14px !important; font-weight: 650 !important; border: 1px solid transparent !important; transition: all 0.15s ease-in-out; }
+.navbar-nav .nav-link, .navbar-nav > li > a { border-radius: 999px !important; padding: 8px 15px !important; margin: 2px 4px !important; color: #3f4a4d !important; font-size: 14px !important; font-weight: 650 !important; border: 1px solid transparent !important; transition: all 0.15s ease-in-out; }
 .navbar-nav .nav-link:hover, .navbar-nav > li > a:hover { background: #eef7f4 !important; color: #24584b !important; border-color: #d2e7df !important; }
 .navbar-nav .nav-link.active, .navbar-nav > li.active > a, .navbar-nav > .active > a, .navbar-nav > .show > a { background: #3f8f7a !important; color: white !important; border-color: #337968 !important; box-shadow: 0 2px 6px rgba(63,143,122,0.25); }
 .navbar-toggler { border: 1px solid #d7e7e2 !important; border-radius: 10px !important; padding: 6px 9px !important; }
-.navbar-collapse { padding-top: 4px; }
-.plot-card { background: transparent; border: none; border-radius: 0; box-shadow: none; padding: 0; min-height: 0; overflow: visible; }
+.navbar-collapse { padding-top: 0; }
+.plot-card {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #e1e7e5;
+  border-radius: 16px;
+  box-shadow: 0 4px 14px rgba(32,50,47,0.035);
+  padding: 8px 6px 2px 6px;
+  min-height: 600px;
+  overflow: hidden;
+}
+.plot-card::before {
+  content: 'Select settings and retrieve data to display chart';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: #6d7a7e;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: radial-gradient(circle at center, rgba(63,143,122,0.055) 0, rgba(63,143,122,0.025) 34%, transparent 68%);
+  pointer-events: none;
+  z-index: 0;
+}
+.plot-card:has(.js-plotly-plot)::before { display: none; }
+.plot-card > .html-widget-output,
+.plot-card > .shiny-plot-output {
+  position: relative;
+  z-index: 1;
+  min-height: 580px;
+}
 .plot-container .legend .traces .legendtext { white-space: normal !important; word-break: break-word !important; }
-.quick-btn { background-color: #f8f9fa !important; color: #4a4a4a !important; border: 1px solid #d6d6d6 !important; border-radius: 8px !important; padding: 6px 12px !important; font-size: 13px !important; font-weight: 500 !important; box-shadow: none !important; margin-right: 6px; margin-bottom: 6px; }
-.quick-btn:hover { background-color: #eef2f5 !important; border-color: #bfc7cf !important; color: #2f2f2f !important; }
-.quick-btn:focus, .quick-btn:active { outline: none !important; box-shadow: none !important; }
-.quick-btn-clear { background-color: #fafafa !important; color: #777 !important; border: 1px solid #d6d6d6 !important; border-radius: 8px !important; padding: 6px 12px !important; font-size: 13px !important; box-shadow: none !important; margin-top: 4px; }
-.quick-btn-clear:hover { background-color: #f1f1f1 !important; color: #555 !important; }
-.app-tab-page { max-width: 1250px; margin: 0 auto; padding: 18px 8px 40px 8px; color: #263238; }
-.tab-hero { background: rgba(255,255,255,0.86); border: 1px solid #dcebe6; border-radius: 18px; padding: 20px 26px; margin-bottom: 18px; box-shadow: 0 2px 10px rgba(32,50,47,0.03), inset 0 1px 0 rgba(255,255,255,0.8); }
-.tab-hero h2 { margin-top: 0; margin-bottom: 6px; font-size: 24px; font-weight: 700; }
-.tab-hero p { margin-bottom: 0; font-size: 14px; line-height: 1.55; max-width: 850px; }
-.tab-badges { margin-top: 12px; }
-.tab-badge { display: inline-block; background: #e8f4f0; color: #24584b; border: 1px solid #cfe6dd; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; margin-right: 6px; margin-bottom: 5px; }
-.control-card { background: #ffffff; border: 1px solid #e1e7e5; border-radius: 16px; padding: 16px 18px; box-shadow: 0 4px 14px rgba(32,50,47,0.045); margin-bottom: 16px; }
-.control-card h3 { margin-top: 0; margin-bottom: 12px; font-size: 17px; font-weight: 700; }
-.control-group { border-top: 1px solid #edf1f0; padding-top: 13px; margin-top: 13px; }
+.quick-btn {
+  background-color: #fbfdfc !important;
+  color: #3f4a4d !important;
+  border: 1px solid #d8e3e0 !important;
+  border-radius: 10px !important;
+  padding: 6px 12px !important;
+  min-height: 32px;
+  font-size: 12.8px !important;
+  font-weight: 600 !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.75), 0 1px 2px rgba(32,50,47,0.025) !important;
+  margin-right: 5px;
+  margin-bottom: 7px;
+  transition: all 0.14s ease-in-out;
+}
+.quick-btn:hover {
+  background-color: #eef7f4 !important;
+  border-color: #c8dfd8 !important;
+  color: #24584b !important;
+  transform: translateY(-1px);
+}
+.quick-btn:focus, .quick-btn:active { outline: none !important; box-shadow: 0 0 0 3px rgba(63,143,122,0.12) !important; }
+.quick-btn-clear {
+  background-color: #ffffff !important;
+  color: #6c777a !important;
+  border: 1px solid #d8e3e0 !important;
+  border-radius: 10px !important;
+  padding: 6px 12px !important;
+  min-height: 32px;
+  font-size: 12.8px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+  margin-top: 4px;
+}
+.quick-btn-clear:hover { background-color: #f6faf8 !important; color: #4d5a5d !important; border-color: #cbdad6 !important; }
+.app-tab-page { max-width: 1250px; margin: 0 auto; padding: 14px 8px 40px 8px; color: #263238; }
+.tab-hero { background: rgba(255,255,255,0.82); border: 1px solid #e1ebe7; border-radius: 16px; padding: 16px 22px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(32,50,47,0.025), inset 0 1px 0 rgba(255,255,255,0.82); }
+.tab-hero h2 { margin-top: 0; margin-bottom: 5px; font-size: 22px; font-weight: 750; letter-spacing: -0.02em; }
+.tab-hero p { margin-bottom: 0; font-size: 13.8px; line-height: 1.5; max-width: 900px; }
+.tab-badges { margin-top: 10px; }
+.tab-badge { display: inline-block; background: #edf7f4; color: #24584b; border: 1px solid #d4e9e1; border-radius: 999px; padding: 4px 10px; font-size: 11.8px; font-weight: 650; margin-right: 6px; margin-bottom: 5px; }
+.control-card { background: #ffffff; border: 1px solid #e1e7e5; border-radius: 16px; padding: 16px 18px; box-shadow: 0 5px 16px rgba(32,50,47,0.04); margin-bottom: 16px; }
+.control-card h3 { margin-top: 0; margin-bottom: 12px; font-size: 16.5px; font-weight: 750; letter-spacing: -0.01em; }
+.control-group { border-top: 1px solid #edf1f0; padding-top: 12px; margin-top: 12px; }
 .control-group:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
-.control-group-title { font-size: 13px; font-weight: 700; color: #34514b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.03em; }
+.control-group-title { font-size: 12.4px; font-weight: 750; color: #34514b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
 .control-note { color: #687579; font-size: 12.5px; line-height: 1.45; margin-top: 6px; margin-bottom: 0; }
-.avg-status { margin-top: 10px; padding: 10px 12px; background: #f7fbf9; border: 1px solid #dcebe6; border-radius: 12px; color: #34514b; font-size: 12.5px; line-height: 1.45; }
-.avg-status strong { color: #20322f; }
-.avg-status-muted { color: #687579; }
+.control-card label { color: #273437; font-weight: 600; }
+.form-control, .selectize-input {
+  border-color: #d8e3e0 !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+.form-control:focus, .selectize-input.focus {
+  border-color: #9ecdc0 !important;
+  box-shadow: 0 0 0 3px rgba(63,143,122,0.12) !important;
+}
+.checkbox label, .radio label { font-weight: 500; color: #3f4a4d; }
+
 .primary-action-btn { width: 100%; background-color: #3f8f7a !important; color: white !important; border: 1px solid #337968 !important; border-radius: 10px !important; padding: 8px 12px !important; font-weight: 700 !important; margin-top: 10px; }
 .primary-action-btn:hover { background-color: #347866 !important; }
 .secondary-action-btn { width: 100%; background-color: #f8f9fa !important; color: #3f4a4d !important; border: 1px solid #d6d6d6 !important; border-radius: 10px !important; padding: 8px 12px !important; font-weight: 600 !important; margin-top: 8px; }
@@ -178,13 +249,17 @@ body { background: #f8fbfa; }
   .app-header-badges { justify-content: flex-start; margin-left: 84px; }
 }
 @media (max-width: 768px) {
-  .app-header { margin: 10px 8px 12px 8px; padding: 18px 16px; }
-  .app-title { font-size: 26px; }
+  .app-header { margin: 10px 8px 10px 8px; padding: 16px 16px; }
+  .app-title { font-size: 25px; }
   .app-brand-block { gap: 12px; align-items: flex-start; }
-  .app-logo-card { width: 58px; height: 58px; border-radius: 15px; }
-  .app-header-badges { justify-content: flex-start; margin-left: 70px; }
-  .navbar { margin-left: 8px !important; margin-right: 8px !important; }
+  .app-logo-card { width: 52px; height: 52px; border-radius: 14px; }
+  .app-header-badges { justify-content: flex-start; margin-left: 64px; }
+  .navbar { margin-left: 8px !important; margin-right: 8px !important; padding: 7px 8px !important; }
   .navbar-nav .nav-link, .navbar-nav > li > a { border-radius: 10px !important; margin: 3px 0 !important; }
+  .tab-hero { padding: 15px 16px; }
+  .plot-card { min-height: 360px; }
+  .plot-card > .html-widget-output,
+  .plot-card > .shiny-plot-output { min-height: 340px; }
 }
 @media (max-width: 520px) {
   .app-brand-block { align-items: center; }
@@ -512,95 +587,6 @@ body { background: #f8fbfa; }
                                                 )
                                         ),
                                         column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot_ar")))
-                                )
-                        )
-                ),
-                tabPanel(
-                        "Average inflation",
-                        tags$div(
-                                class = "app-tab-page",
-                                tab_hero(
-                                        "Average inflation",
-                                        "Calculate the average annual inflation rate over a selected monthly period and decompose it into average component contributions. The calculation uses the same M/M-12 contribution logic as the annual-rate tab, but averages the selected months.",
-                                        badges = c("HICP", "HICP-CT", "Average M/M-12", "Average contributions", "Range slider")
-                                ),
-                                fluidRow(
-                                        column(
-                                                width = 3,
-                                                tags$div(
-                                                        class = "control-card",
-                                                        tags$h3("Average inflation settings"),
-                                                        control_group(
-                                                                "Index measure",
-                                                                radioButtons(
-                                                                        "avg_measure",
-                                                                        NULL,
-                                                                        choices = c("HICP" = "HICP", "HICP-CT" = "HICP_CT"),
-                                                                        selected = "HICP",
-                                                                        inline = TRUE
-                                                                ),
-                                                                note = "Only one measure is shown at a time."
-                                                        ),
-                                                        control_group(
-                                                                "Countries",
-                                                                country_group_buttons("avg"),
-                                                                selectInput(
-                                                                        "countries_avg",
-                                                                        "Custom countries selection",
-                                                                        choices = setNames(eurostat_countries$code, eurostat_countries$name),
-                                                                        multiple = TRUE
-                                                                )
-                                                        ),
-                                                        control_group(
-                                                                "Classification and aggregate",
-                                                                radioButtons(
-                                                                        "classification_avg",
-                                                                        "Classification",
-                                                                        choices = c("ECOICOP ver. 2" = "ecoicop", "Special aggregates" = "sa", "Administered prices" = "ap"),
-                                                                        selected = "ecoicop"
-                                                                ),
-                                                                selectInput(
-                                                                        "coicop_avg",
-                                                                        "Select product category",
-                                                                        choices = setNames(label_set$coicop18_code, label_set$code_label),
-                                                                        multiple = FALSE
-                                                                ),
-                                                                uiOutput("avg_ecoicop_level_ui"),
-                                                                uiOutput("avg_component_selection_ui")
-                                                        ),
-                                                        control_group(
-                                                                "Contribution target",
-                                                                radioButtons(
-                                                                        "contribution_type_avg",
-                                                                        "Contribution to",
-                                                                        choices = c(
-                                                                                "selected higher aggregate" = "selected higher aggregate",
-                                                                                "all-items selected index" = "all-items HICP"
-                                                                        ),
-                                                                        selected = "selected higher aggregate"
-                                                                ),
-                                                                checkboxInput(
-                                                                        "avg_show_total_rate",
-                                                                        "Show aggregate annual rate (when available) and Other component",
-                                                                        value = TRUE
-                                                                ),
-                                                                note = "The average is calculated as an arithmetic mean of monthly M/M-12 rates and contributions over the selected period. If unchecked, the aggregate rate marker and any Other component are hidden and the y-axis is scaled to the displayed contributions."
-                                                        ),
-                                                        actionButton("update_avg", "Retrieve data", class = "primary-action-btn"),
-                                                        uiOutput("avg_data_status"),
-                                                        conditionalPanel(
-                                                                condition = "input.update_avg > 0",
-                                                                control_group(
-                                                                        "Period range",
-                                                                        uiOutput("avg_period_range_ui"),
-                                                                        actionButton("update_avg_plot", "Update plot", class = "primary-action-btn"),
-                                                                        note = "Both endpoints are included. Changing the range does not redraw the chart until you click Update plot."
-                                                                )
-                                                        ),
-                                                        download_panel("output.plot_avg", "downloadData_avg")
-                                                )
-                                        ),
-                                        column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot_avg")))
                                 )
                         )
                 ),
