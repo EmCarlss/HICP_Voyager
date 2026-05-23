@@ -133,18 +133,19 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
 .navbar-collapse { padding-top: 0; }
 .plot-card {
   position: relative;
-  background: #ffffff;
-  border: 1px solid #e1e7e5;
-  border-radius: 16px;
-  box-shadow: 0 4px 14px rgba(32,50,47,0.035);
-  padding: 8px 6px 2px 6px;
-  min-height: 600px;
-  overflow: hidden;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  min-height: 620px;
+  overflow: visible;
 }
 .plot-card::before {
   content: 'Select settings and retrieve data to display chart';
   position: absolute;
   inset: 0;
+  min-height: 360px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -154,16 +155,26 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.01em;
-  background: radial-gradient(circle at center, rgba(63,143,122,0.055) 0, rgba(63,143,122,0.025) 34%, transparent 68%);
+  background: #ffffff;
+  border: 1px dashed #d7e7e2;
+  border-radius: 16px;
   pointer-events: none;
   z-index: 0;
 }
+.plot-card.has-plot::before,
 .plot-card:has(.js-plotly-plot)::before { display: none; }
 .plot-card > .html-widget-output,
 .plot-card > .shiny-plot-output {
   position: relative;
   z-index: 1;
-  min-height: 580px;
+  min-height: 620px;
+  height: 620px;
+  width: 100%;
+  overflow: visible;
+}
+.plot-card .js-plotly-plot {
+  max-width: 100%;
+  overflow: visible;
 }
 .plot-container .legend .traces .legendtext { white-space: normal !important; word-break: break-word !important; }
 .quick-btn {
@@ -257,9 +268,10 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
   .navbar { margin-left: 8px !important; margin-right: 8px !important; padding: 7px 8px !important; }
   .navbar-nav .nav-link, .navbar-nav > li > a { border-radius: 10px !important; margin: 3px 0 !important; }
   .tab-hero { padding: 15px 16px; }
-  .plot-card { min-height: 360px; }
+  .plot-card { min-height: 480px; padding: 0; }
+  .plot-card::before { min-height: 300px; }
   .plot-card > .html-widget-output,
-  .plot-card > .shiny-plot-output { min-height: 340px; }
+  .plot-card > .shiny-plot-output { min-height: 480px; height: 480px; }
 }
 @media (max-width: 520px) {
   .app-brand-block { align-items: center; }
@@ -267,6 +279,66 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
   .app-header-badges { margin-left: 0; }
   .app-subtitle { font-size: 13.5px; }
 }
+")),
+        tags$script(HTML("
+(function() {
+  function syncPlotCardHeight(root) {
+    if (!root) return;
+    var gd = root.classList && root.classList.contains('js-plotly-plot') ? root : root.querySelector && root.querySelector('.js-plotly-plot');
+    if (!gd) return;
+
+    var output = gd.closest('.html-widget-output, .shiny-plot-output');
+    var card = gd.closest('.plot-card');
+    var layoutHeight = gd._fullLayout && gd._fullLayout.height ? gd._fullLayout.height : 0;
+    var boxHeight = gd.getBoundingClientRect ? gd.getBoundingClientRect().height : 0;
+    var plotHeight = Math.max(layoutHeight, boxHeight, gd.offsetHeight || 0);
+    if (!plotHeight) return;
+
+    var reservedHeight = Math.ceil(plotHeight + 18);
+
+    if (output) {
+      output.style.height = reservedHeight + 'px';
+      output.style.minHeight = reservedHeight + 'px';
+      output.style.overflow = 'visible';
+    }
+    if (card) {
+      card.classList.add('has-plot');
+      card.style.minHeight = reservedHeight + 'px';
+      card.style.overflow = 'visible';
+    }
+  }
+
+  function syncAllPlotCards() {
+    document.querySelectorAll('.plot-card .js-plotly-plot').forEach(syncPlotCardHeight);
+  }
+
+  document.addEventListener('plotly_afterplot', function(e) {
+    window.requestAnimationFrame(function() { syncPlotCardHeight(e.target); });
+  }, true);
+
+  document.addEventListener('shiny:value', function(e) {
+    window.setTimeout(function() {
+      syncPlotCardHeight(e.target);
+      if (e.target && e.target.querySelectorAll) {
+        e.target.querySelectorAll('.js-plotly-plot').forEach(syncPlotCardHeight);
+      }
+      syncAllPlotCards();
+    }, 120);
+  }, true);
+
+  var observer = new MutationObserver(function() {
+    window.setTimeout(syncAllPlotCards, 120);
+  });
+
+  document.addEventListener('DOMContentLoaded', function() {
+    observer.observe(document.body, { childList: true, subtree: true });
+    syncAllPlotCards();
+  });
+
+  window.addEventListener('resize', function() {
+    window.setTimeout(syncAllPlotCards, 80);
+  });
+})();
 ")),
         tags$div(
                 class = "app-header",
@@ -398,7 +470,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                         download_panel("output.plot", "downloadData")
                                                 )
                                         ),
-                                        column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot")))
+                                        column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot", height = "620px")))
                                 )
                         )
                 ),
@@ -483,7 +555,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                         download_panel("output.plot_mr", "downloadData_mr")
                                                 )
                                         ),
-                                        column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot_mr")))
+                                        column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot_mr", height = "620px")))
                                 )
                         )
                 ),
@@ -586,7 +658,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                         download_panel("output.plot_ar", "downloadData_ar")
                                                 )
                                         ),
-                                        column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot_ar")))
+                                        column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot_ar", height = "620px")))
                                 )
                         )
                 ),
@@ -633,7 +705,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                         download_panel("output.plot_se", "downloadData_se")
                                                 )
                                         ),
-                                        column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot_se")))
+                                        column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot_se", height = "620px")))
                                 )
                         )
                 ),
@@ -710,7 +782,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                         download_panel("output.plot_w", "downloadData_w")
                                                 )
                                         ),
-                                        column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot_w")))
+                                        column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot_w", height = "620px")))
                                 )
                         )
                 ),

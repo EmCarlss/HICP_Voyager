@@ -286,12 +286,20 @@ function(input, output, session) {
                 max_height <- panel_width / min_ratio
                 panel_height <- max(min_height, min(panel_height, max_height))
 
+                # Plotly subplots need extra vertical room for row spacing,
+                # facet titles, tick labels and margins. The visual frame around
+                # the chart has intentionally been removed in the UI, but the page
+                # still needs to reserve enough height for multi-panel charts.
+                row_gap <- if (nrows > 1) (nrows - 1) * 70 else 0
+                outer_margin <- 90
+                total_height <- max(620, ceiling(nrows * panel_height + row_gap + outer_margin))
+
                 list(
                         ncols = ncols,
                         nrows = nrows,
                         panel_width = panel_width,
                         panel_height = panel_height,
-                        total_height = ceiling(nrows * panel_height)
+                        total_height = total_height
                 )
         }
 
@@ -1077,7 +1085,7 @@ function(input, output, session) {
                                 shareY = TRUE
                         ) %>%
                                 layout(
-                                        autosize = TRUE,
+                                        autosize = FALSE,
                                         height = dims$total_height,
                                         font = list(size = 11),
                                         legend = list(traceorder = "normal", font = list(size = 11), x = 1.02, y = 1),
@@ -1590,7 +1598,7 @@ function(input, output, session) {
                                         shareY = TRUE
                                 ) %>%
                                         layout(
-                                                autosize = TRUE,
+                                                autosize = FALSE,
                                                 height = dims$total_height,
                                                 font = list(size = 11),
                                                 legend = list(traceorder = "normal")
@@ -1677,7 +1685,7 @@ function(input, output, session) {
                                         shareY = TRUE
                                 ) %>%
                                         layout(
-                                                autosize = TRUE,
+                                                autosize = FALSE,
                                                 height = dims$total_height,
                                                 font = list(size = 11),
                                                 legend = list(traceorder = "normal")
@@ -1986,7 +1994,7 @@ function(input, output, session) {
                                                 ),
                                                 font = list(size = 11),
                                                 legend = list(traceorder = "normal"),
-                                                autosize = TRUE,
+                                                autosize = FALSE,
                                                 height = 600
                                         ) %>%
                                         plotly_build()
@@ -2067,7 +2075,7 @@ function(input, output, session) {
                                         shareY = TRUE
                                 ) %>%
                                         layout(
-                                                autosize = TRUE,
+                                                autosize = FALSE,
                                                 height = dims$total_height,
                                                 font = list(size = 11),
                                                 legend = list(traceorder = "normal")
@@ -2235,7 +2243,7 @@ function(input, output, session) {
                                 shareY = TRUE
                         ) %>%
                                 layout(
-                                        autosize = TRUE,
+                                        autosize = FALSE,
                                         height = dims$total_height,
                                         font = list(size = 11),
                                         legend = list(traceorder = "reversed")
