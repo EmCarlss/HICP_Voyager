@@ -1,5 +1,6 @@
 library(shiny)
 library(eurostat)
+library(shinyWidgets)
 library(dplyr)
 library(stringr)
 library(zoo)
@@ -52,6 +53,7 @@ function(input, output, session) {
         add_country_group_observers("index", "countries", session, input, country_groups)
         add_country_group_observers("mr", "countries_mr", session, input, country_groups)
         add_country_group_observers("ar", "countries_ar", session, input, country_groups)
+        add_country_group_observers("avg", "countries_avg", session, input, country_groups)
         add_country_group_observers("se", "countries_se", session, input, country_groups)
         add_country_group_observers("weights", "countries_w", session, input, country_groups)
 
@@ -108,9 +110,191 @@ function(input, output, session) {
                 }
         }
 
+        null_coalesce <- function(x, y) {
+                if (is.null(x) || length(x) == 0 || all(is.na(x))) y else x
+        }
+
+        get_direct_children <- function(hierarchy, selected_code) {
+                hierarchy %>%
+                        filter(parent_code == selected_code) %>%
+                        arrange(coicop18_code)
+        }
+
+        get_descendants <- function(hierarchy, selected_code) {
+                selected_code <- as.character(selected_code)
+                all_descendants <- character(0)
+                frontier <- selected_code
+
+                repeat {
+                        children <- hierarchy$coicop18_code[hierarchy$parent_code %in% frontier]
+                        children <- setdiff(unique(children[!is.na(children)]), all_descendants)
+
+                        if (length(children) == 0) break
+
+                        all_descendants <- c(all_descendants, children)
+                        frontier <- children
+                }
+
+                hierarchy %>%
+                        filter(coicop18_code %in% all_descendants) %>%
+                        arrange(coicop18_code)
+        }
+
+        coicop_level_name <- function(level) {
+                if (is.null(level) || length(level) == 0 || is.na(level)) {
+                        return(NA_character_)
+                }
+
+                if (level == 1) {
+                        "total"
+                } else if (level == 2) {
+                        "division"
+                } else if (level == 3) {
+                        "group"
+                } else if (level == 4) {
+                        "class"
+                } else {
+                        "subclass"
+                }
+        }
+
+        ecoicop_prefix_descendants <- function(hierarchy, selected_code) {
+                selected_code <- as.character(selected_code)
+
+                if (identical(selected_code, "CP00")) {
+                        hierarchy %>%
+                                filter(coicop18_code != "CP00") %>%
+                                arrange(coicop18_code)
+                } else {
+                        hierarchy %>%
+                                filter(
+                                        coicop18_code != selected_code,
+                                        startsWith(coicop18_code, selected_code)
+                                ) %>%
+                                arrange(coicop18_code)
+                }
+        }
+
+        ecoicop_leaf_descendants <- function(hierarchy, selected_code) {
+                # Use prefix logic rather than only parent_code. Some ECOICOP codes
+                # contain zeroes or skip an intermediate published aggregate. If the
+                # parent_code relation is imperfect, a parent and its child can both
+                # be treated as leaves, which double-counts the basket and creates a
+                # large negative aggregation residual. Prefix pruning keeps only
+                # terminal, non-overlapping components under the selected aggregate.
+                descendants <- ecoicop_prefix_descendants(hierarchy, selected_code)
+                if (nrow(descendants) == 0) return(descendants)
+
+                codes <- descendants$coicop18_code
+                has_child <- vapply(
+                        codes,
+                        function(code) any(startsWith(codes, code) & nchar(codes) > nchar(code)),
+                        logical(1)
+                )
+
+                descendants %>%
+                        mutate(.has_child = has_child) %>%
+                        filter(!.has_child) %>%
+                        select(-.has_child) %>%
+                        arrange(coicop18_code)
+        }
+
+        avg_ecoicop_level_choices <- function(selected_code) {
+                hierarchy <- selected_hierarchy("ecoicop")
+                selected_row <- hierarchy %>% filter(coicop18_code == selected_code)
+                if (nrow(selected_row) == 0) {
+                        return(c("Next lower aggregate" = "direct"))
+                }
+
+                selected_level <- selected_row$level[1]
+                direct_children <- get_direct_children(hierarchy, selected_code)
+                descendants <- ecoicop_prefix_descendants(hierarchy, selected_code)
+                leaf_descendants <- ecoicop_leaf_descendants(hierarchy, selected_code)
+
+                direct_level <- if (nrow(direct_children) > 0) direct_children$level[1] else NA_real_
+                direct_label <- "Next lower aggregate"
+                if (!is.na(direct_level)) {
+                        direct_label <- paste0(direct_label, " (", coicop_level_name(direct_level), ")")
+                }
+
+                choices <- setNames("direct", direct_label)
+
+                if (selected_level < 3 && any(descendants$level == 3, na.rm = TRUE)) {
+                        choices <- c(choices, "Groups" = "group")
+                }
+
+                if (selected_level < 4 && any(descendants$level == 4, na.rm = TRUE)) {
+                        choices <- c(choices, "Classes" = "class")
+                }
+
+                if (selected_level < 5 && nrow(leaf_descendants) > 0) {
+                        choices <- c(choices, "Subclasses" = "subclass")
+                }
+
+                choices
+        }
+
+        avg_ecoicop_components_for_level <- function(selected_code, level_mode) {
+                hierarchy <- selected_hierarchy("ecoicop")
+                level_mode <- null_coalesce(level_mode, "direct")
+
+                components <- if (identical(level_mode, "direct")) {
+                        get_direct_children(hierarchy, selected_code)
+                } else if (identical(level_mode, "group")) {
+                        ecoicop_prefix_descendants(hierarchy, selected_code) %>% filter(level == 3)
+                } else if (identical(level_mode, "class")) {
+                        ecoicop_prefix_descendants(hierarchy, selected_code) %>% filter(level == 4)
+                } else if (identical(level_mode, "subclass")) {
+                        ecoicop_leaf_descendants(hierarchy, selected_code)
+                } else {
+                        get_direct_children(hierarchy, selected_code)
+                }
+
+                if (nrow(components) == 0) {
+                        components <- hierarchy %>% filter(coicop18_code == selected_code)
+                }
+
+                components %>% arrange(coicop18_code)
+        }
+
+        avg_other_component_label <- function(level_mode) {
+                if (identical(level_mode, "group")) {
+                        "Other groups"
+                } else if (identical(level_mode, "class")) {
+                        "Other classes"
+                } else if (identical(level_mode, "subclass")) {
+                        "Other subclasses"
+                } else {
+                        "Other"
+                }
+        }
+
         first_non_na <- function(x) {
                 y <- x[!is.na(x)]
                 if (length(y) == 0) NA_real_ else y[1]
+        }
+
+        format_data_size <- function(bytes) {
+                bytes <- as.numeric(bytes)
+                if (length(bytes) == 0 || is.na(bytes) || !is.finite(bytes)) {
+                        return("unknown size")
+                }
+
+                units <- c("B", "KB", "MB", "GB")
+                unit_index <- 1
+                while (bytes >= 1024 && unit_index < length(units)) {
+                        bytes <- bytes / 1024
+                        unit_index <- unit_index + 1
+                }
+
+                paste0(format(round(bytes, ifelse(unit_index <= 2, 0, 2)), big.mark = ",", nsmall = ifelse(unit_index <= 2, 0, 2)), " ", units[unit_index])
+        }
+
+        avg_period_label_from_id <- function(time_id) {
+                time_id <- as.integer(time_id)
+                year_num <- floor((time_id - 1L) / 12L)
+                month_num <- ((time_id - 1L) %% 12L) + 1L
+                paste(year_num, month.name[month_num])
         }
 
         finite_range <- function(x, default = c(-1, 1), pad = 0.06, min_padding = NULL) {
@@ -328,6 +512,23 @@ function(input, output, session) {
                 updateSelectInput(
                         session,
                         "coicop_ar",
+                        choices = setNames(hierarchy$coicop18_code, hierarchy$code_label),
+                        selected = new_selection
+                )
+        }, ignoreInit = FALSE)
+
+
+        observeEvent(input$classification_avg, {
+                hierarchy <- selected_hierarchy(input$classification_avg)
+                old_selection <- isolate(input$coicop_avg)
+                new_selection <- if (!is.null(old_selection) && old_selection %in% hierarchy$coicop18_code) {
+                        old_selection
+                } else {
+                        "CP00"
+                }
+                updateSelectInput(
+                        session,
+                        "coicop_avg",
                         choices = setNames(hierarchy$coicop18_code, hierarchy$code_label),
                         selected = new_selection
                 )
@@ -1004,7 +1205,7 @@ function(input, output, session) {
         # Shared contribution data calculation
         # ------------------------------------------------------------
 
-        get_contribution_setup <- function(countries, selected_code, classification, contribution_type, measure) {
+        get_contribution_setup <- function(countries, selected_code, classification, contribution_type, measure, component_codes = NULL) {
                 current_hierarchy <- selected_hierarchy(classification)
                 filtered_data <- current_hierarchy[current_hierarchy$parent_code == selected_code, ]
                 coicops <- eurostat_coicop_code(selected_code)
@@ -1012,7 +1213,11 @@ function(input, output, session) {
                 measure_label <- selected_hicp_measure_label(measure)
                 index_dataset <- selected_hicp_index_dataset(measure)
 
-                result <- unique(filtered_data$coicop18_code)
+                if (!is.null(component_codes)) {
+                        result <- unique(component_codes)
+                } else {
+                        result <- unique(filtered_data$coicop18_code)
+                }
                 result <- result[!is.na(result)]
 
                 if (length(result) == 0) {
@@ -1033,12 +1238,142 @@ function(input, output, session) {
                 )
         }
 
-        get_index_and_weight_data <- function(setup) {
-                data_I <- get_eurostat(
+        eurostat_request_cache <- new.env(parent = emptyenv())
+
+        normalise_eurostat_filters <- function(filters) {
+                filter_names <- sort(names(filters))
+                paste(
+                        vapply(
+                                filter_names,
+                                function(filter_name) {
+                                        filter_values <- filters[[filter_name]]
+                                        filter_values <- sort(unique(as.character(filter_values[!is.na(filter_values)])))
+                                        paste0(filter_name, "=", paste(filter_values, collapse = ","))
+                                },
+                                character(1)
+                        ),
+                        collapse = "|"
+                )
+        }
+
+        get_eurostat_cached <- function(dataset, filters, update_cache = FALSE) {
+                cache_key <- paste(dataset, normalise_eurostat_filters(filters), sep = "::")
+
+                if (!isTRUE(update_cache) && exists(cache_key, envir = eurostat_request_cache, inherits = FALSE)) {
+                        return(get(cache_key, envir = eurostat_request_cache, inherits = FALSE))
+                }
+
+                data <- get_eurostat(
+                        dataset,
+                        filters = filters,
+                        update_cache = update_cache
+                )
+
+                assign(cache_key, data, envir = eurostat_request_cache)
+                data
+        }
+
+        get_eurostat_chunked <- function(
+                dataset,
+                filters,
+                chunk_var = "coicop18",
+                chunk_size = 15,
+                update_cache = FALSE,
+                try_full_first = TRUE
+        ) {
+                # Fast path: try to fetch all requested values in one Eurostat call.
+                # This is usually best for Average inflation when users choose many subclasses,
+                # because the app needs the full component universe to calculate "Other ..." locally.
+                # If Eurostat rejects the large request, fall back to adaptive chunking.
+                values_to_chunk <- unique(filters[[chunk_var]])
+                values_to_chunk <- values_to_chunk[!is.na(values_to_chunk)]
+
+                if (length(values_to_chunk) == 0) {
+                        return(data.frame())
+                }
+
+                fetch_direct <- function(values) {
+                        local_filters <- filters
+                        local_filters[[chunk_var]] <- values
+
+                        tryCatch(
+                                list(
+                                        ok = TRUE,
+                                        data = get_eurostat_cached(
+                                                dataset,
+                                                filters = local_filters,
+                                                update_cache = update_cache
+                                        )
+                                ),
+                                error = function(e) {
+                                        list(ok = FALSE, data = data.frame(), message = conditionMessage(e))
+                                }
+                        )
+                }
+
+                fetch_adaptive <- function(values) {
+                        if (length(values) == 0) {
+                                return(data.frame())
+                        }
+
+                        result <- fetch_direct(values)
+                        if (isTRUE(result$ok)) {
+                                return(result$data)
+                        }
+
+                        if (length(values) == 1) {
+                                warning(
+                                        paste0(
+                                                "Eurostat request failed for ", dataset, ", ",
+                                                chunk_var, " = ", values, ": ", result$message
+                                        ),
+                                        call. = FALSE
+                                )
+                                return(data.frame())
+                        }
+
+                        split_at <- ceiling(length(values) / 2)
+                        bind_rows(
+                                fetch_adaptive(values[seq_len(split_at)]),
+                                fetch_adaptive(values[(split_at + 1):length(values)])
+                        )
+                }
+
+                if (isTRUE(try_full_first)) {
+                        full_result <- fetch_direct(values_to_chunk)
+                        if (isTRUE(full_result$ok)) {
+                                return(full_result$data)
+                        }
+                }
+
+                # Backwards-compatible fallback: if full retrieval fails, start with
+                # moderately large chunks and only split further when a chunk fails.
+                # This keeps the number of API calls much lower than one call per code.
+                if (length(values_to_chunk) <= chunk_size) {
+                        return(fetch_adaptive(values_to_chunk))
+                }
+
+                chunks <- split(values_to_chunk, ceiling(seq_along(values_to_chunk) / chunk_size))
+                bind_rows(lapply(chunks, fetch_adaptive))
+        }
+
+        get_index_and_weight_data <- function(setup, progress_callback = NULL) {
+                notify_progress <- function(stage, status, data = NULL) {
+                        if (is.function(progress_callback)) {
+                                progress_callback(stage = stage, status = status, data = data)
+                        }
+                }
+
+                notify_progress("index", "start")
+                data_I <- get_eurostat_chunked(
                         setup$index_dataset,
                         filters = list(geo = setup$countries, unit = "I25", coicop18 = setup$full_coicop),
-                        update_cache = TRUE
+                        chunk_var = "coicop18",
+                        chunk_size = 75,
+                        update_cache = FALSE,
+                        try_full_first = TRUE
                 )
+                notify_progress("index", "done", data_I)
 
                 validate(
                         need(
@@ -1047,12 +1382,24 @@ function(input, output, session) {
                         )
                 )
 
-                data_W <- get_eurostat(
+                notify_progress("weights", "start")
+                data_W <- get_eurostat_chunked(
                         "prc_hicp_iw",
                         filters = list(geo = setup$countries, coicop18 = setup$full_coicop),
-                        update_cache = TRUE
+                        chunk_var = "coicop18",
+                        chunk_size = 75,
+                        update_cache = FALSE,
+                        try_full_first = TRUE
                 ) %>%
                         select(-any_of("statinfo"))
+                notify_progress("weights", "done", data_W)
+
+                validate(
+                        need(
+                                nrow(data_W) > 0,
+                                "No HICP weight data available for the selected countries and aggregate."
+                        )
+                )
 
                 list(data_I = data_I, data_W = data_W)
         }
@@ -1845,6 +2192,909 @@ function(input, output, session) {
                         }
                 })
         })
+
+
+        # ------------------------------------------------------------
+        # Average annual inflation controls
+        # ------------------------------------------------------------
+
+        output$avg_ecoicop_level_ui <- renderUI({
+                req(input$classification_avg, input$coicop_avg)
+
+                if (!identical(input$classification_avg, "ecoicop")) {
+                        return(NULL)
+                }
+
+                choices <- avg_ecoicop_level_choices(input$coicop_avg)
+                selected <- isolate(input$avg_ecoicop_component_level)
+                if (is.null(selected) || !(selected %in% unname(choices))) {
+                        selected <- unname(choices[1])
+                }
+
+                tags$div(
+                        style = "margin-top: 12px;",
+                        radioButtons(
+                                "avg_ecoicop_component_level",
+                                "COICOP component level",
+                                choices = choices,
+                                selected = selected
+                        ),
+                        tags$p(
+                                class = "control-note",
+                                "Use the next lower aggregate to reproduce the standard decomposition. Choose groups, classes or subclasses to display a custom subset and aggregate the remaining components as Other."
+                        )
+                )
+        })
+
+        output$avg_component_selection_ui <- renderUI({
+                req(input$classification_avg, input$coicop_avg)
+
+                if (!identical(input$classification_avg, "ecoicop")) {
+                        return(NULL)
+                }
+
+                level_choices <- avg_ecoicop_level_choices(input$coicop_avg)
+                level_mode <- null_coalesce(input$avg_ecoicop_component_level, unname(level_choices[1]))
+
+                if (identical(level_mode, "direct")) {
+                        return(NULL)
+                }
+
+                components <- avg_ecoicop_components_for_level(input$coicop_avg, level_mode)
+                selected <- intersect(null_coalesce(isolate(input$avg_selected_components), character(0)), components$coicop18_code)
+                level_label <- if (identical(level_mode, "group")) {
+                        "groups"
+                } else if (identical(level_mode, "class")) {
+                        "classes"
+                } else {
+                        "subclasses"
+                }
+
+                tags$div(
+                        style = "margin-top: 8px;",
+                        selectizeInput(
+                                "avg_selected_components",
+                                paste0("Select ", level_label, " shown separately"),
+                                choices = setNames(components$coicop18_code, components$code_label),
+                                selected = selected,
+                                multiple = TRUE,
+                                width = "100%",
+                                options = list(
+                                        plugins = list("remove_button"),
+                                        placeholder = paste0("Choose one or more ", level_label)
+                                )
+                        ),
+                        tags$p(
+                                class = "control-note",
+                                paste0("Non-selected ", level_label, " are summed as ", avg_other_component_label(level_mode), " when the checkbox below is selected.")
+                        )
+                )
+        })
+
+        avg_component_setup <- reactive({
+                req(input$coicop_avg, input$classification_avg)
+
+                if (!identical(input$classification_avg, "ecoicop")) {
+                        return(list(
+                                level_mode = "direct",
+                                fetch_components = NULL,
+                                selected_components = NULL,
+                                use_other = FALSE,
+                                other_label = NA_character_
+                        ))
+                }
+
+                level_choices <- avg_ecoicop_level_choices(input$coicop_avg)
+                level_mode <- null_coalesce(input$avg_ecoicop_component_level, unname(level_choices[1]))
+                if (!(level_mode %in% unname(level_choices))) {
+                        level_mode <- unname(level_choices[1])
+                }
+
+                components <- avg_ecoicop_components_for_level(input$coicop_avg, level_mode)
+                validate(need(nrow(components) > 0, "No lower-level ECOICOP components are available for the selected aggregate."))
+
+                fetch_components <- unique(components$coicop18_code)
+
+                if (identical(level_mode, "direct")) {
+                        selected_components <- fetch_components
+                        use_other <- FALSE
+                } else {
+                        selected_components <- intersect(null_coalesce(input$avg_selected_components, character(0)), fetch_components)
+                        validate(
+                                need(
+                                        length(selected_components) > 0,
+                                        "Select at least one ECOICOP component to show separately, or choose the next lower aggregate option."
+                                )
+                        )
+                        use_other <- TRUE
+                }
+
+                list(
+                        level_mode = level_mode,
+                        fetch_components = fetch_components,
+                        selected_components = selected_components,
+                        use_other = use_other,
+                        other_label = avg_other_component_label(level_mode)
+                )
+        })
+
+        # ------------------------------------------------------------
+        # Average annual inflation data and plot
+        # ------------------------------------------------------------
+
+        avg_download_info <- reactiveVal(NULL)
+        avg_period_context <- reactiveVal(NULL)
+
+        # Plain per-session snapshots used by the Update plot observer. They avoid
+        # needing to call eventReactive() results from the button observer, which has
+        # proven brittle while the dynamic slider is being initialised.
+        avg_data_snapshot <- NULL
+        avg_period_context_snapshot <- NULL
+        avg_retrieval_context_snapshot <- NULL
+
+        output$avg_data_status <- renderUI({
+                info <- avg_download_info()
+
+                if (is.null(info)) {
+                        return(tags$div(
+                                class = "avg-status avg-status-muted",
+                                "No Average inflation data retrieved yet. Click Retrieve data to fetch data from Eurostat. A progress indicator is shown while the request is running."
+                        ))
+                }
+
+                tags$div(
+                        class = "avg-status",
+                        tags$strong("Latest retrieval"),
+                        tags$br(),
+                        paste0(
+                                info$measure_label, " | ",
+                                info$n_countries, " countries | ",
+                                info$n_codes, " requested COICOP codes"
+                        ),
+                        tags$br(),
+                        paste0(
+                                "Rows: index ", format(info$index_rows, big.mark = ",", scientific = FALSE),
+                                ", weights ", format(info$weight_rows, big.mark = ",", scientific = FALSE),
+                                " | approx. ", format_data_size(info$total_bytes), " processed"
+                        ),
+                        tags$br(),
+                        tags$span(
+                                class = "avg-status-muted",
+                                paste0("Updated ", format(info$completed_at, "%Y-%m-%d %H:%M:%S"), ". Size is based on the R objects after retrieval, not the raw HTTP payload.")
+                        )
+                )
+        })
+
+        hikp_avg_data <- eventReactive(input$update_avg, {
+                req(input$countries_avg, input$coicop_avg, input$classification_avg, input$avg_measure)
+
+                avg_download_info(NULL)
+                avg_period_context(NULL)
+                avg_data_snapshot <<- NULL
+                avg_period_context_snapshot <<- NULL
+                avg_retrieval_context_snapshot <<- NULL
+
+                withProgress(
+                        message = "Retrieving Average inflation data",
+                        detail = "Preparing Eurostat request...",
+                        value = 0,
+                        expr = {
+                                setProgress(0.03, detail = "Preparing component list and request filters...")
+
+                                avg_components <- avg_component_setup()
+
+                                setup <- get_contribution_setup(
+                                        countries = input$countries_avg,
+                                        selected_code = input$coicop_avg,
+                                        classification = input$classification_avg,
+                                        contribution_type = input$contribution_type_avg,
+                                        measure = input$avg_measure,
+                                        component_codes = avg_components$fetch_components
+                                )
+
+                                index_bytes <- 0
+                                weight_bytes <- 0
+                                index_rows <- 0
+                                weight_rows <- 0
+
+                                progress_callback <- function(stage, status, data = NULL) {
+                                        if (identical(stage, "index") && identical(status, "start")) {
+                                                setProgress(
+                                                        0.10,
+                                                        detail = paste0(
+                                                                "Retrieving ", setup$measure_label, " index data from Eurostat/cache (",
+                                                                length(setup$countries), " countries, ",
+                                                                length(setup$full_coicop), " COICOP codes)..."
+                                                        )
+                                                )
+                                        } else if (identical(stage, "index") && identical(status, "done")) {
+                                                index_bytes <<- as.numeric(object.size(data))
+                                                index_rows <<- nrow(data)
+                                                setProgress(
+                                                        0.40,
+                                                        detail = paste0(
+                                                                "Index data received: ",
+                                                                format(index_rows, big.mark = ",", scientific = FALSE),
+                                                                " rows, approx. ", format_data_size(index_bytes), "."
+                                                        )
+                                                )
+                                        } else if (identical(stage, "weights") && identical(status, "start")) {
+                                                setProgress(
+                                                        0.45,
+                                                        detail = paste0(
+                                                                "Retrieving HICP weight data from Eurostat/cache (",
+                                                                length(setup$countries), " countries, ",
+                                                                length(setup$full_coicop), " COICOP codes)..."
+                                                        )
+                                                )
+                                        } else if (identical(stage, "weights") && identical(status, "done")) {
+                                                weight_bytes <<- as.numeric(object.size(data))
+                                                weight_rows <<- nrow(data)
+                                                setProgress(
+                                                        0.68,
+                                                        detail = paste0(
+                                                                "Weight data received: ",
+                                                                format(weight_rows, big.mark = ",", scientific = FALSE),
+                                                                " rows, approx. ", format_data_size(weight_bytes), "."
+                                                        )
+                                                )
+                                        }
+                                }
+
+                                raw_data <- get_index_and_weight_data(setup, progress_callback = progress_callback)
+                                data_I <- raw_data$data_I
+                                data_W <- raw_data$data_W
+
+                                new_plot_avg_data <<- TRUE
+
+                                setProgress(0.72, detail = "Preparing component index and weight data...")
+
+                                data_I_j <- data_I %>%
+                                        filter(coicop18 %in% setup$result) %>%
+                                        mutate(year = year(time)) %>%
+                                        select(-any_of(c("freq", "unit"))) %>%
+                                        rename(IX_j = values)
+
+                                data_W_jTOT <- prepare_component_weights(data_W, setup, input$contribution_type_avg)
+                                result_j <- left_join(data_I_j, data_W_jTOT, by = c("year", "coicop18", "geo"))
+
+                                data_AR <- data_I %>%
+                                        filter(coicop18 %in% setup$target_coicop) %>%
+                                        mutate(year = year(time), month = month(time))
+
+                                m_AR_ymin1 <- data_AR %>%
+                                        mutate(year = year + 1) %>%
+                                        select(-any_of(c("unit", "time", "freq"))) %>%
+                                        rename(IX_A_m_ymin1 = values)
+
+                                data_AR <- data_AR %>%
+                                        left_join(m_AR_ymin1, by = c("year", "month", "geo", "coicop18")) %>%
+                                        mutate(ann_rate_00 = values / IX_A_m_ymin1 * 100 - 100) %>%
+                                        select(-any_of(c("freq", "unit", "values", "IX_A_m_ymin1")))
+
+                                data_I_TARGET <- data_I %>%
+                                        filter(coicop18 %in% setup$target_coicop) %>%
+                                        select(-any_of(c("freq", "unit", "coicop18"))) %>%
+                                        rename(IX_TOT = values)
+
+                                result_jTOT <- left_join(result_j, data_I_TARGET, by = c("time", "geo")) %>%
+                                        mutate(year = year(time), month = month(time))
+
+                                dec_data_ymin1 <- result_jTOT %>%
+                                        filter(month == 12) %>%
+                                        select(-month) %>%
+                                        mutate(year = year + 1) %>%
+                                        select(-time) %>%
+                                        rename(IX_j_12_ymin1 = IX_j, WT_j_12_ymin1 = WT_j, IX_TOT_12_ymin1 = IX_TOT)
+
+                                result_jTOT2 <- left_join(result_jTOT, dec_data_ymin1, by = c("year", "geo", "coicop18"))
+
+                                dec_data_ymin2 <- result_jTOT %>%
+                                        filter(month == 12) %>%
+                                        select(-month) %>%
+                                        mutate(year = year + 2) %>%
+                                        select(-time) %>%
+                                        rename(IX_j_12_ymin2 = IX_j, WT_j_12_ymin2 = WT_j, IX_TOT_12_ymin2 = IX_TOT)
+
+                                result_jTOT2 <- left_join(result_jTOT2, dec_data_ymin2, by = c("year", "geo", "coicop18"))
+
+                                m_data_ymin1 <- result_jTOT %>%
+                                        mutate(year = year + 1) %>%
+                                        select(-time) %>%
+                                        rename(IX_j_m_ymin1 = IX_j, WT_j_m_ymin1 = WT_j, IX_TOT_m_ymin1 = IX_TOT)
+
+                                result_jTOT2 <- left_join(result_jTOT2, m_data_ymin1, by = c("year", "month", "geo", "coicop18"))
+
+                                numeric_vars <- c(
+                                        "IX_j", "WT_j", "IX_TOT", "IX_j_12_ymin1", "WT_j_12_ymin1", "IX_TOT_12_ymin1",
+                                        "IX_j_12_ymin2", "WT_j_12_ymin2", "IX_TOT_12_ymin2", "IX_j_m_ymin1",
+                                        "WT_j_m_ymin1", "IX_TOT_m_ymin1"
+                                )
+
+                                setProgress(0.82, detail = "Calculating M/M-12 rates and component contributions...")
+
+                                result_jTOT2 <- result_jTOT2 %>%
+                                        mutate(
+                                                Contr_j = if_else(
+                                                        rowSums(is.na(across(all_of(numeric_vars)))) > 0,
+                                                        NA_real_,
+                                                        (100 * (IX_TOT_12_ymin1 / IX_TOT_m_ymin1 * WT_j / 1000) * ((IX_j - IX_j_12_ymin1) / IX_j_12_ymin1)) +
+                                                                100 * ((IX_TOT_12_ymin2 / IX_TOT_m_ymin1 * WT_j_12_ymin1 / 1000) * ((IX_j_12_ymin1 - IX_j_m_ymin1) / IX_j_12_ymin2))
+                                                )
+                                        )
+
+                                result_jTOT2 <- full_join(result_jTOT2, data_AR, by = c("year", "time", "month", "geo", "coicop18"))
+
+                                data <- result_jTOT2 %>%
+                                        select(year, month, time, geo, coicop18, ann_rate_00, Contr_j) %>%
+                                        mutate(
+                                                measure = setup$measure_label,
+                                                target_coicop = setup$target_coicop,
+                                                avg_component_level_mode = avg_components$level_mode,
+                                                avg_use_other = avg_components$use_other,
+                                                avg_selected_component = coicop18 %in% avg_components$selected_components,
+                                                avg_other_label = avg_components$other_label
+                                        )
+
+                                data_no_na <- data %>% filter(!is.na(Contr_j) | !is.na(ann_rate_00))
+                                validate(need(nrow(data_no_na) > 0, "No annual rate or contribution data available for the selected combination."))
+
+                                min_years <- data_no_na %>%
+                                        group_by(geo) %>%
+                                        summarise(min_year = min(time), .groups = "drop")
+                                first_non_na_year <- min_years %>%
+                                        summarise(first_common_year = max(min_year), .groups = "drop") %>%
+                                        pull(first_common_year)
+
+                                data <- filter(data, time >= max(first_non_na_year))
+
+                                setProgress(0.92, detail = "Preparing period slider metadata...")
+
+                                final_data <- data %>%
+                                        mutate(avg_time_id = year * 12L + month)
+
+                                available_periods <- final_data %>%
+                                        filter(!is.na(Contr_j) | !is.na(ann_rate_00)) %>%
+                                        distinct(geo, avg_time_id) %>%
+                                        count(avg_time_id, name = "n_geo") %>%
+                                        filter(n_geo == length(setup$countries)) %>%
+                                        arrange(avg_time_id) %>%
+                                        mutate(avg_period_label = avg_period_label_from_id(avg_time_id)) %>%
+                                        select(avg_time_id, avg_period_label, n_geo)
+
+                                validate(need(nrow(available_periods) > 0, "No common periods with data for the selected countries."))
+
+                                avg_period_context_snapshot <<- list(
+                                        countries = setup$countries,
+                                        periods = available_periods
+                                )
+                                avg_period_context(avg_period_context_snapshot)
+
+                                avg_retrieval_context_snapshot <<- list(
+                                        countries = setup$countries,
+                                        classification = input$classification_avg,
+                                        contribution_type = input$contribution_type_avg,
+                                        data_version = input$update_avg
+                                )
+
+                                total_bytes <- index_bytes + weight_bytes
+                                avg_download_info(list(
+                                        measure_label = setup$measure_label,
+                                        n_countries = length(setup$countries),
+                                        n_codes = length(setup$full_coicop),
+                                        index_rows = index_rows,
+                                        weight_rows = weight_rows,
+                                        index_bytes = index_bytes,
+                                        weight_bytes = weight_bytes,
+                                        total_bytes = total_bytes,
+                                        completed_at = Sys.time()
+                                ))
+
+                                setProgress(
+                                        1,
+                                        detail = paste0(
+                                                "Ready. Processed approx. ", format_data_size(total_bytes),
+                                                " of index and weight data."
+                                        )
+                                )
+
+                                avg_data_snapshot <<- final_data
+
+                                final_data
+                        }
+                )
+        })
+
+        avg_period_choices_from_snapshot <- function(data_snapshot, current_countries, ctx = NULL) {
+                current_countries <- as.character(current_countries)
+
+                if (!is.null(ctx) && setequal(as.character(ctx$countries), current_countries)) {
+                        available_periods <- ctx$periods
+                } else {
+                        available_periods <- data_snapshot %>%
+                                filter(geo %in% current_countries) %>%
+                                filter(!is.na(Contr_j) | !is.na(ann_rate_00)) %>%
+                                distinct(geo, avg_time_id) %>%
+                                count(avg_time_id, name = "n_geo") %>%
+                                filter(n_geo == length(current_countries)) %>%
+                                arrange(avg_time_id) %>%
+                                mutate(avg_period_label = avg_period_label_from_id(avg_time_id)) %>%
+                                select(avg_time_id, avg_period_label, n_geo)
+                }
+
+                if (is.null(available_periods) || nrow(available_periods) == 0) {
+                        stop("No common periods with data for the selected countries.", call. = FALSE)
+                }
+
+                period_list <- available_periods$avg_period_label
+                default_periods <- tail(available_periods, min(12, nrow(available_periods)))
+                selected_periods <- c(default_periods$avg_period_label[1], default_periods$avg_period_label[nrow(default_periods)])
+
+                list(choices = period_list, selected = selected_periods, periods = available_periods)
+        }
+
+        selected_avg_data <- reactive({
+                req(hikp_avg_data(), input$countries_avg)
+
+                avg_period_choices_from_snapshot(
+                        data_snapshot = hikp_avg_data(),
+                        current_countries = input$countries_avg,
+                        ctx = avg_period_context()
+                )
+        })
+
+        output$avg_period_range_ui <- renderUI({
+                req(input$update_avg > 0)
+
+                avg_choices <- selected_avg_data()
+
+                sliderTextInput(
+                        "avg_period_range",
+                        "Select months included in average",
+                        choices = avg_choices$choices,
+                        selected = avg_choices$selected,
+                        grid = FALSE,
+                        width = "100%"
+                )
+        })
+
+        observeEvent(hikp_avg_data(), {
+                req(input$countries_avg)
+                info <- avg_download_info()
+                status_suffix <- if (!is.null(info)) {
+                        paste0(
+                                " Processed approx. ", format_data_size(info$total_bytes),
+                                " (index ", format(info$index_rows, big.mark = ",", scientific = FALSE),
+                                " rows, weights ", format(info$weight_rows, big.mark = ",", scientific = FALSE), " rows)."
+                        )
+                } else {
+                        ""
+                }
+
+                showNotification(
+                        paste0("Average inflation data retrieved.", status_suffix, " Adjust the period range if needed, then click Update plot."),
+                        type = "message",
+                        duration = 8
+                )
+        }, ignoreInit = TRUE)
+
+        build_avg_summary_data <- function(
+                data_snapshot,
+                avg_choices,
+                selected_periods,
+                current_countries,
+                classification_avg,
+                contribution_type_avg,
+                show_total_rate_avg,
+                data_version,
+                plot_version
+        ) {
+                if (is.null(data_snapshot) || length(current_countries) == 0) {
+                        stop("Retrieve data and select at least one country before updating the plot.", call. = FALSE)
+                }
+
+                available_periods <- avg_choices$periods
+
+                # The period slider is rendered dynamically after retrieval. On the
+                # first click after a new retrieval, the browser may not yet have sent
+                # the slider value back to Shiny. Use the server-side default range as
+                # a fallback instead of letting the first Update plot click disappear.
+                if (
+                        is.null(selected_periods) ||
+                        length(selected_periods) != 2 ||
+                        any(is.na(selected_periods)) ||
+                        any(selected_periods == "") ||
+                        any(is.na(match(selected_periods, available_periods$avg_period_label)))
+                ) {
+                        selected_periods <- avg_choices$selected
+                }
+
+                range_index <- match(selected_periods, available_periods$avg_period_label)
+
+                if (length(selected_periods) != 2) {
+                        stop("Select a start and end month.", call. = FALSE)
+                }
+
+                if (any(is.na(range_index))) {
+                        stop("Select a valid period range.", call. = FALSE)
+                }
+
+                selected_period_rows <- available_periods[min(range_index):max(range_index), , drop = FALSE]
+                selected_labels <- selected_period_rows$avg_period_label
+                start_time_id <- min(selected_period_rows$avg_time_id)
+                end_time_id <- max(selected_period_rows$avg_time_id)
+
+                time_filtered_data <- data_snapshot %>%
+                        filter(
+                                geo %in% current_countries,
+                                avg_time_id >= start_time_id,
+                                avg_time_id <= end_time_id
+                        )
+
+                if (!(any(!is.na(time_filtered_data$Contr_j)) | any(!is.na(time_filtered_data$ann_rate_00)))) {
+                        stop("No data for the selected country/countries and period.", call. = FALSE)
+                }
+
+                month_counts <- time_filtered_data %>%
+                        filter(!is.na(Contr_j) | !is.na(ann_rate_00)) %>%
+                        distinct(geo, avg_time_id) %>%
+                        group_by(geo) %>%
+                        summarise(n_months = n(), .groups = "drop")
+
+                label_set_avg <- selected_label_set(classification_avg)
+                target_coicop_avg <- first_non_na(time_filtered_data$target_coicop)
+
+                component_avgs <- time_filtered_data %>%
+                        filter(!is.na(Contr_j), is.na(target_coicop_avg) | coicop18 != target_coicop_avg) %>%
+                        mutate(
+                                avg_selected_component = ifelse(is.na(avg_selected_component), TRUE, avg_selected_component),
+                                avg_use_other = ifelse(is.na(avg_use_other), FALSE, avg_use_other),
+                                avg_other_label = ifelse(is.na(avg_other_label), "Other", avg_other_label)
+                        ) %>%
+                        group_by(
+                                geo,
+                                coicop18,
+                                avg_selected_component,
+                                avg_use_other,
+                                avg_other_label
+                        ) %>%
+                        summarise(
+                                sum_contribution = sum(Contr_j, na.rm = TRUE),
+                                contribution_months = sum(!is.na(Contr_j)),
+                                .groups = "drop"
+                        ) %>%
+                        left_join(month_counts, by = "geo") %>%
+                        left_join(label_set_avg, by = c("coicop18" = "coicop18_code")) %>%
+                        mutate(
+                                code_label = ifelse(is.na(code_label) | code_label == "", as.character(coicop18), code_label),
+                                code_label_wrapped = wrap_legend(code_label, width = 45),
+                                # Keep the denominator equal to the selected average period, so the
+                                # component bars remain additive for the selected window. Missing
+                                # components therefore show up in the aggregation residual instead
+                                # of being silently described as rounding.
+                                avg_contribution = sum_contribution / n_months
+                        )
+
+                avg_rate_data <- time_filtered_data %>%
+                        filter(!is.na(ann_rate_00)) %>%
+                        distinct(geo, avg_time_id, ann_rate_00) %>%
+                        group_by(geo) %>%
+                        summarise(
+                                avg_ann_rate = mean(ann_rate_00, na.rm = TRUE),
+                                rate_months = n(),
+                                .groups = "drop"
+                        )
+
+                show_total_rate_avg <- isTRUE(show_total_rate_avg)
+                use_other_avg <- any(component_avgs$avg_use_other, na.rm = TRUE)
+
+                if (use_other_avg) {
+                        selected_plot_data <- component_avgs %>%
+                                filter(avg_selected_component) %>%
+                                select(geo, coicop18, code_label, code_label_wrapped, avg_contribution, n_months)
+
+                        if (show_total_rate_avg) {
+                                other_label <- first_non_na(component_avgs$avg_other_label)
+                                other_plot_data <- component_avgs %>%
+                                        filter(!avg_selected_component) %>%
+                                        group_by(geo) %>%
+                                        summarise(
+                                                avg_contribution = sum(avg_contribution, na.rm = TRUE),
+                                                n_months = max(n_months, na.rm = TRUE),
+                                                .groups = "drop"
+                                        ) %>%
+                                        mutate(
+                                                coicop18 = "OTHER",
+                                                code_label = other_label,
+                                                code_label_wrapped = wrap_legend(other_label, width = 45)
+                                        ) %>%
+                                        filter(abs(avg_contribution) > 0.001) %>%
+                                        select(geo, coicop18, code_label, code_label_wrapped, avg_contribution, n_months)
+
+                                plot_data <- bind_rows(selected_plot_data, other_plot_data)
+                        } else {
+                                plot_data <- selected_plot_data
+                        }
+                } else {
+                        plot_data <- component_avgs %>%
+                                select(geo, coicop18, code_label, code_label_wrapped, avg_contribution, n_months)
+                }
+
+                if (show_total_rate_avg && contribution_type_avg == "selected higher aggregate") {
+                        residual_data <- plot_data %>%
+                                group_by(geo) %>%
+                                summarise(component_total = sum(avg_contribution, na.rm = TRUE), .groups = "drop") %>%
+                                right_join(avg_rate_data, by = "geo") %>%
+                                mutate(
+                                        avg_contribution = avg_ann_rate - ifelse(is.na(component_total), 0, component_total),
+                                        coicop18 = "RESIDUAL",
+                                        code_label = "Aggregation residual",
+                                        code_label_wrapped = wrap_legend("Aggregation residual", width = 45),
+                                        n_months = rate_months
+                                ) %>%
+                                filter(abs(avg_contribution) > 0.001) %>%
+                                select(geo, coicop18, code_label, code_label_wrapped, avg_contribution, n_months)
+
+                        plot_data <- bind_rows(plot_data, residual_data)
+                }
+
+                period_label <- paste0(
+                        "Average of ", length(selected_labels), " months: ",
+                        selected_labels[1], " to ", selected_labels[length(selected_labels)]
+                )
+
+                list(
+                        plot_data = plot_data,
+                        avg_rate_data = avg_rate_data,
+                        period_label = period_label,
+                        selected_labels = selected_labels,
+                        month_counts = month_counts,
+                        measure_label = unique(na.omit(time_filtered_data$measure))[1],
+                        contribution_type = contribution_type_avg,
+                        show_total_rate = show_total_rate_avg,
+                        countries = current_countries,
+                        data_version = data_version,
+                        plot_version = plot_version
+                )
+        }
+
+        # Do not use ignoreInit = TRUE here. With a dynamically rendered
+        # sliderTextInput, the first user click on Update plot can otherwise be
+        # treated as the initial event for this eventReactive and be ignored,
+        # which makes the chart appear only on the second click. For an
+        # actionButton, ignoreNULL = TRUE is sufficient to prevent calculation
+        # before the user has clicked the button because the initial value 0 is
+        # treated as NULL-like by Shiny.
+        avg_summary_data <- eventReactive(input$update_avg_plot, {
+                data_snapshot <- hikp_avg_data()
+                retrieval_context <- avg_retrieval_context_snapshot
+                ctx <- avg_period_context()
+
+                if (is.null(data_snapshot) || is.null(retrieval_context)) {
+                        stop("Retrieve Average inflation data before updating the plot.", call. = FALSE)
+                }
+
+                current_countries <- retrieval_context$countries
+                selected_periods <- input$avg_period_range
+                classification_avg <- retrieval_context$classification
+                contribution_type_avg <- retrieval_context$contribution_type
+                show_total_rate_avg <- input$avg_show_total_rate
+                data_version <- retrieval_context$data_version
+                plot_version <- input$update_avg_plot
+
+                avg_choices <- avg_period_choices_from_snapshot(
+                        data_snapshot = data_snapshot,
+                        current_countries = current_countries,
+                        ctx = ctx
+                )
+
+                invalid_period <- is.null(selected_periods) ||
+                        length(selected_periods) != 2 ||
+                        any(is.na(selected_periods)) ||
+                        any(selected_periods == "") ||
+                        any(is.na(match(selected_periods, avg_choices$periods$avg_period_label)))
+
+                if (invalid_period) {
+                        selected_periods <- avg_choices$selected
+                        updateSliderTextInput(session, "avg_period_range", selected = selected_periods)
+                }
+
+                build_avg_summary_data(
+                        data_snapshot = data_snapshot,
+                        avg_choices = avg_choices,
+                        selected_periods = selected_periods,
+                        current_countries = current_countries,
+                        classification_avg = classification_avg,
+                        contribution_type_avg = contribution_type_avg,
+                        show_total_rate_avg = show_total_rate_avg,
+                        data_version = data_version,
+                        plot_version = plot_version
+                )
+        }, ignoreNULL = TRUE)
+
+        output$plot_avg <- renderPlotly({
+                req(hikp_avg_data())
+                validate(
+                        need(
+                                input$update_avg_plot > 0,
+                                "Data has been retrieved. Select a period range and click Update plot to draw the chart."
+                        )
+                )
+
+                summary <- avg_summary_data()
+                validate(
+                        need(
+                                isTRUE(as.integer(summary$data_version) == as.integer(input$update_avg)),
+                                "The retrieved data or display settings changed. Click Update plot to refresh the chart."
+                        )
+                )
+
+                plot_data <- summary$plot_data
+                avg_rate_data <- summary$avg_rate_data
+                measure_label <- summary$measure_label
+                contribution_type_avg <- summary$contribution_type
+                annual_marker_name <- paste0("Average annual rate M/M-12 (", measure_label, ")")
+                all_items_axis_avg <- paste0("Average contrib. to ", measure_label, " M/M-12, %-points")
+                selected_axis_avg <- paste0("Average contributions and annual rate (", measure_label, "), %-points / %")
+                contribution_axis_avg <- paste0("Average contribution (", measure_label, "), %-points")
+                show_total_rate_avg <- isTRUE(summary$show_total_rate)
+
+                validate(
+                        need(
+                                nrow(plot_data) > 0 || (show_total_rate_avg && nrow(avg_rate_data) > 0),
+                                "No average inflation data available for the selected period."
+                        )
+                )
+
+                plot_data <- plot_data %>%
+                        mutate(
+                                geo_chr = as.character(geo),
+                                avg_contribution = ifelse(is.na(avg_contribution), 0, avg_contribution),
+                                code_label = ifelse(is.na(code_label) | code_label == "", as.character(coicop18), code_label),
+                                code_label_wrapped = ifelse(
+                                        is.na(code_label_wrapped) | code_label_wrapped == "",
+                                        wrap_legend(code_label, width = 45),
+                                        code_label_wrapped
+                                )
+                        ) %>%
+                        filter(!is.na(code_label_wrapped), is.finite(avg_contribution))
+
+                if (show_total_rate_avg && contribution_type_avg == "selected higher aggregate" && nrow(avg_rate_data) > 0) {
+                        geo_order <- avg_rate_data %>%
+                                mutate(geo_chr = as.character(geo)) %>%
+                                arrange(avg_ann_rate, geo_chr) %>%
+                                pull(geo_chr)
+                } else {
+                        geo_order <- plot_data %>%
+                                group_by(geo_chr) %>%
+                                summarise(total_contribution = sum(avg_contribution, na.rm = TRUE), .groups = "drop") %>%
+                                arrange(total_contribution, geo_chr) %>%
+                                pull(geo_chr)
+                }
+                geo_order <- unique(as.character(geo_order))
+
+                if (length(geo_order) == 0) {
+                        geo_order <- unique(as.character(summary$countries))
+                }
+
+                plot_data <- plot_data %>%
+                        mutate(geo_chr = as.character(geo_chr))
+
+                stacked_range_avg <- stacked_component_range(
+                        plot_data,
+                        value_col = "avg_contribution",
+                        group_cols = c("geo_chr")
+                )
+
+                if (show_total_rate_avg && contribution_type_avg == "selected higher aggregate") {
+                        y_rng <- visible_y_range(
+                                c(stacked_range_avg$positive_sum, stacked_range_avg$negative_sum, avg_rate_data$avg_ann_rate, 0),
+                                default = c(-1, 1),
+                                pad_fraction = 0.08,
+                                min_pad = 0.20
+                        )
+                } else {
+                        y_rng <- visible_y_range(
+                                c(stacked_range_avg$positive_sum, stacked_range_avg$negative_sum, 0),
+                                default = c(-1, 1),
+                                pad_fraction = 0.08,
+                                min_pad = 0.20
+                        )
+                }
+
+                component_styles_avg <- component_style_map(plot_data$code_label_wrapped)
+
+                validate(
+                        need(
+                                nrow(component_styles_avg) > 0 || (show_total_rate_avg && nrow(avg_rate_data) > 0),
+                                "No component data available for the selected display settings."
+                        )
+                )
+
+                subpl <- add_styled_bar_traces(
+                        plot_ly(),
+                        plot_data,
+                        x_col = "geo_chr",
+                        y_col = "avg_contribution",
+                        style_map = component_styles_avg,
+                        showlegend = TRUE
+                )
+
+                if (show_total_rate_avg && contribution_type_avg == "selected higher aggregate") {
+                        marker_data <- avg_rate_data %>%
+                                mutate(geo_chr = as.character(geo))
+
+                        subpl <- subpl %>%
+                                add_trace(
+                                        data = marker_data,
+                                        x = ~geo_chr,
+                                        y = ~avg_ann_rate,
+                                        type = "scatter",
+                                        mode = "markers",
+                                        inherit = FALSE,
+                                        name = annual_marker_name,
+                                        marker = list(color = "black", size = 11),
+                                        showlegend = TRUE,
+                                        legendrank = 1,
+                                        text = ~paste0(
+                                                geo, "<br>Average M/M-12: ", round(avg_ann_rate, 2), "%<br>Months: ", rate_months
+                                        ),
+                                        hoverinfo = "text"
+                                )
+                }
+
+                y_title <- if (show_total_rate_avg && contribution_type_avg == "selected higher aggregate") {
+                        selected_axis_avg
+                } else if (contribution_type_avg == "all-items HICP") {
+                        all_items_axis_avg
+                } else {
+                        contribution_axis_avg
+                }
+
+                plotly_plot_avg <- subpl %>%
+                        layout(
+                                yaxis = list(range = y_rng, title = y_title),
+                                xaxis = list(title = "", type = "category", categoryorder = "array", categoryarray = geo_order),
+                                barmode = "relative",
+                                annotations = list(
+                                        text = summary$period_label,
+                                        xref = "paper",
+                                        yref = "paper",
+                                        yanchor = "bottom",
+                                        xanchor = "center",
+                                        align = "center",
+                                        x = 0.5,
+                                        y = 0.95,
+                                        showarrow = FALSE
+                                ),
+                                font = list(size = 11),
+                                legend = list(traceorder = "normal", font = list(size = 11), x = 1.02, y = 1),
+                                margin = list(r = 190),
+                                autosize = TRUE,
+                                height = 650
+                        ) %>%
+                        plotly_build()
+
+                plotly_plot_avg$x$attrs$legend$x$class <- "plot-container"
+                plotly_plot_avg
+        })
+
+        output$downloadData_avg <- downloadHandler(
+                filename = function() {
+                        "average_inflation_data.csv"
+                },
+                content = function(file) {
+                        summary <- avg_summary_data()
+                        req(isTRUE(as.integer(summary$data_version) == as.integer(input$update_avg)))
+                        ddata <- summary$plot_data %>%
+                                left_join(summary$avg_rate_data, by = "geo") %>%
+                                mutate(
+                                        period_start = summary$selected_labels[1],
+                                        period_end = summary$selected_labels[length(summary$selected_labels)]
+                                )
+                        write.csv(ddata, file, row.names = FALSE)
+                }
+        )
 
         # ------------------------------------------------------------
         # Seasonality data and plot

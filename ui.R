@@ -81,34 +81,52 @@ download_panel <- function(condition, download_id) {
 
 ui <- fluidPage(
         theme = bs_theme(bootswatch = "minty"),
+        tags$head(tags$link(rel = "icon", type = "image/png", href = "app_logo_favicon.png")),
         tags$style(HTML("
-body { background: #fbfdfc; }
+body { background: #f8fbfa; }
 .app-header {
   max-width: 1250px;
-  margin: 14px auto 12px auto;
-  padding: 22px 28px;
-  background: radial-gradient(circle at top left, rgba(63,143,122,0.10) 0, rgba(63,143,122,0.03) 32%, transparent 58%), linear-gradient(135deg, #f7fbf9 0%, #eef7f4 100%);
+  margin: 16px auto 12px auto;
+  padding: 18px 24px;
+  background: radial-gradient(circle at top left, rgba(63,143,122,0.09) 0, rgba(63,143,122,0.025) 36%, transparent 62%), linear-gradient(135deg, #f9fcfb 0%, #f1f8f6 100%);
   border: 1px solid #dcebe6;
-  border-radius: 22px;
-  box-shadow: 0 5px 18px rgba(32,50,47,0.045);
+  border-radius: 20px;
+  box-shadow: 0 4px 16px rgba(32,50,47,0.04);
   color: #263238;
 }
-.app-header-main { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
-.app-kicker { font-size: 12px; font-weight: 700; color: #3f8f7a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px; }
-.app-title { margin: 0; font-size: 31px; font-weight: 800; letter-spacing: -0.035em; color: #20322f; }
-.app-subtitle { margin-top: 7px; margin-bottom: 0; max-width: 750px; font-size: 15px; line-height: 1.55; color: #526064; }
-.app-header-badges { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.app-header-main { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: nowrap; }
+.app-brand-block { display: flex; align-items: center; gap: 16px; min-width: 0; flex: 1 1 auto; }
+.app-brand-text { min-width: 0; }
+.app-logo-card {
+  flex: 0 0 auto;
+  width: 68px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 17px;
+  background: rgba(255,255,255,0.72);
+  border: 1px solid rgba(215,231,226,0.95);
+  box-shadow: 0 7px 18px rgba(32,50,47,0.075);
+  overflow: hidden;
+}
+.app-logo { width: 100%; height: 100%; object-fit: cover; padding: 0; display: block; }
+.app-kicker { font-size: 11.5px; font-weight: 800; color: #3f8f7a; text-transform: uppercase; letter-spacing: 0.11em; margin-bottom: 4px; }
+.app-title { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.035em; color: #20322f; }
+.app-subtitle { margin-top: 7px; margin-bottom: 0; max-width: 780px; font-size: 14.5px; line-height: 1.5; color: #526064; }
+.app-header-badges { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; flex: 0 0 auto; }
 .app-version-pill, .app-meta-pill { display: inline-block; border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .app-version-pill { background: #3f8f7a; color: white; border: 1px solid #337968; }
 .app-meta-pill { background: #ffffff; color: #34514b; border: 1px solid #d7e7e2; }
-.navbar { max-width: 1250px; margin: 0 auto 18px auto !important; padding: 8px 10px !important; background: rgba(255,255,255,0.96) !important; border: 1px solid #e1e7e5 !important; border-radius: 18px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.04); min-height: unset !important; }
-.navbar .container-fluid, .navbar .container { padding-left: 8px !important; padding-right: 8px !important; }
-.navbar-brand { padding-top: 4px !important; padding-bottom: 4px !important; margin-right: 18px !important; font-weight: 800 !important; color: #20322f !important; }
+.navbar { max-width: 1250px; margin: 0 auto 16px auto !important; padding: 10px 14px !important; background: rgba(255,255,255,0.96) !important; border: 1px solid #e1e7e5 !important; border-radius: 18px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.035); min-height: unset !important; }
+.navbar .container-fluid, .navbar .container { padding-left: 0 !important; padding-right: 0 !important; }
+.navbar-brand { display: none !important; }
 .navbar-brand-custom { display: inline-flex; align-items: center; gap: 8px; }
 .navbar-brand-icon-only { gap: 0; }
+.navbar-logo { display: none; }
 .navbar-brand-mark { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 8px; background: #3f8f7a; color: white; font-size: 14px; font-weight: 800; }
 .navbar-nav { gap: 6px; }
-.navbar-nav .nav-link, .navbar-nav > li > a { border-radius: 999px !important; padding: 8px 14px !important; margin: 2px 3px !important; color: #3f4a4d !important; font-size: 14px !important; font-weight: 650 !important; border: 1px solid transparent !important; transition: all 0.15s ease-in-out; }
+.navbar-nav .nav-link, .navbar-nav > li > a { border-radius: 999px !important; padding: 8px 16px !important; margin: 2px 3px !important; color: #3f4a4d !important; font-size: 14px !important; font-weight: 650 !important; border: 1px solid transparent !important; transition: all 0.15s ease-in-out; }
 .navbar-nav .nav-link:hover, .navbar-nav > li > a:hover { background: #eef7f4 !important; color: #24584b !important; border-color: #d2e7df !important; }
 .navbar-nav .nav-link.active, .navbar-nav > li.active > a, .navbar-nav > .active > a, .navbar-nav > .show > a { background: #3f8f7a !important; color: white !important; border-color: #337968 !important; box-shadow: 0 2px 6px rgba(63,143,122,0.25); }
 .navbar-toggler { border: 1px solid #d7e7e2 !important; border-radius: 10px !important; padding: 6px 9px !important; }
@@ -121,7 +139,7 @@ body { background: #fbfdfc; }
 .quick-btn-clear { background-color: #fafafa !important; color: #777 !important; border: 1px solid #d6d6d6 !important; border-radius: 8px !important; padding: 6px 12px !important; font-size: 13px !important; box-shadow: none !important; margin-top: 4px; }
 .quick-btn-clear:hover { background-color: #f1f1f1 !important; color: #555 !important; }
 .app-tab-page { max-width: 1250px; margin: 0 auto; padding: 18px 8px 40px 8px; color: #263238; }
-.tab-hero { background: linear-gradient(135deg, #f8fcfa 0%, #eef7f4 100%); border: 1px solid #dcebe6; border-radius: 18px; padding: 20px 26px; margin-bottom: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.75); }
+.tab-hero { background: rgba(255,255,255,0.86); border: 1px solid #dcebe6; border-radius: 18px; padding: 20px 26px; margin-bottom: 18px; box-shadow: 0 2px 10px rgba(32,50,47,0.03), inset 0 1px 0 rgba(255,255,255,0.8); }
 .tab-hero h2 { margin-top: 0; margin-bottom: 6px; font-size: 24px; font-weight: 700; }
 .tab-hero p { margin-bottom: 0; font-size: 14px; line-height: 1.55; max-width: 850px; }
 .tab-badges { margin-top: 12px; }
@@ -132,6 +150,9 @@ body { background: #fbfdfc; }
 .control-group:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
 .control-group-title { font-size: 13px; font-weight: 700; color: #34514b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.03em; }
 .control-note { color: #687579; font-size: 12.5px; line-height: 1.45; margin-top: 6px; margin-bottom: 0; }
+.avg-status { margin-top: 10px; padding: 10px 12px; background: #f7fbf9; border: 1px solid #dcebe6; border-radius: 12px; color: #34514b; font-size: 12.5px; line-height: 1.45; }
+.avg-status strong { color: #20322f; }
+.avg-status-muted { color: #687579; }
 .primary-action-btn { width: 100%; background-color: #3f8f7a !important; color: white !important; border: 1px solid #337968 !important; border-radius: 10px !important; padding: 8px 12px !important; font-weight: 700 !important; margin-top: 10px; }
 .primary-action-btn:hover { background-color: #347866 !important; }
 .secondary-action-btn { width: 100%; background-color: #f8f9fa !important; color: #3f4a4d !important; border: 1px solid #d6d6d6 !important; border-radius: 10px !important; padding: 8px 12px !important; font-weight: 600 !important; margin-top: 8px; }
@@ -152,12 +173,24 @@ body { background: #fbfdfc; }
 .help-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
 .help-table th { background: #f4f8f7; border-bottom: 1px solid #dce5e2; padding: 10px; text-align: left; font-weight: 700; }
 .help-table td { border-bottom: 1px solid #edf1f0; padding: 10px; vertical-align: top; }
+@media (max-width: 900px) {
+  .app-header-main { flex-wrap: wrap; }
+  .app-header-badges { justify-content: flex-start; margin-left: 84px; }
+}
 @media (max-width: 768px) {
-  .app-header { margin: 10px 8px 12px 8px; padding: 20px 18px; }
+  .app-header { margin: 10px 8px 12px 8px; padding: 18px 16px; }
   .app-title { font-size: 26px; }
-  .app-header-badges { justify-content: flex-start; }
+  .app-brand-block { gap: 12px; align-items: flex-start; }
+  .app-logo-card { width: 58px; height: 58px; border-radius: 15px; }
+  .app-header-badges { justify-content: flex-start; margin-left: 70px; }
   .navbar { margin-left: 8px !important; margin-right: 8px !important; }
   .navbar-nav .nav-link, .navbar-nav > li > a { border-radius: 10px !important; margin: 3px 0 !important; }
+}
+@media (max-width: 520px) {
+  .app-brand-block { align-items: center; }
+  .app-logo-card { width: 50px; height: 50px; border-radius: 13px; }
+  .app-header-badges { margin-left: 0; }
+  .app-subtitle { font-size: 13.5px; }
 }
 ")),
         tags$div(
@@ -165,25 +198,30 @@ body { background: #fbfdfc; }
                 tags$div(
                         class = "app-header-main",
                         tags$div(
-                                tags$div(class = "app-kicker", "European price statistics dashboard"),
-                                tags$h1(class = "app-title", "HICP Voyager"),
-                                tags$p(
-                                        class = "app-subtitle",
-                                        "Analyse HICP indices, HICP-CT indices, inflation rates, contributions, seasonality and weights across Europe."
+                                class = "app-brand-block",
+                                tags$div(
+                                        class = "app-logo-card",
+                                        tags$img(src = "app_logo.png", class = "app-logo", alt = "HICP Voyager logo")
+                                ),
+                                tags$div(
+                                        class = "app-brand-text",
+                                        tags$div(class = "app-kicker", "European price statistics dashboard"),
+                                        tags$h1(class = "app-title", "HICP Voyager"),
+                                        tags$p(
+                                                class = "app-subtitle",
+                                                "Analyse HICP indices, HICP-CT indices, inflation rates, contributions, seasonality and weights across Europe."
+                                        )
                                 )
                         ),
                         tags$div(
                                 class = "app-header-badges",
-                                tags$span(class = "app-version-pill", "Version 2.3"),
+                                tags$span(class = "app-version-pill", "Version 2.4"),
                                 tags$span(class = "app-meta-pill", "Source: Eurostat HICP data")
                         )
                 )
         ),
         navbarPage(
-                title = tags$span(
-                        class = "navbar-brand-custom navbar-brand-icon-only",
-                        tags$span(class = "navbar-brand-mark", "H")
-                ),
+                title = tags$span(class = "navbar-brand-custom navbar-brand-icon-only", ""),
                 id = "main_tabs",
                 collapsible = TRUE,
                 tabPanel(
@@ -478,6 +516,95 @@ body { background: #fbfdfc; }
                         )
                 ),
                 tabPanel(
+                        "Average inflation",
+                        tags$div(
+                                class = "app-tab-page",
+                                tab_hero(
+                                        "Average inflation",
+                                        "Calculate the average annual inflation rate over a selected monthly period and decompose it into average component contributions. The calculation uses the same M/M-12 contribution logic as the annual-rate tab, but averages the selected months.",
+                                        badges = c("HICP", "HICP-CT", "Average M/M-12", "Average contributions", "Range slider")
+                                ),
+                                fluidRow(
+                                        column(
+                                                width = 3,
+                                                tags$div(
+                                                        class = "control-card",
+                                                        tags$h3("Average inflation settings"),
+                                                        control_group(
+                                                                "Index measure",
+                                                                radioButtons(
+                                                                        "avg_measure",
+                                                                        NULL,
+                                                                        choices = c("HICP" = "HICP", "HICP-CT" = "HICP_CT"),
+                                                                        selected = "HICP",
+                                                                        inline = TRUE
+                                                                ),
+                                                                note = "Only one measure is shown at a time."
+                                                        ),
+                                                        control_group(
+                                                                "Countries",
+                                                                country_group_buttons("avg"),
+                                                                selectInput(
+                                                                        "countries_avg",
+                                                                        "Custom countries selection",
+                                                                        choices = setNames(eurostat_countries$code, eurostat_countries$name),
+                                                                        multiple = TRUE
+                                                                )
+                                                        ),
+                                                        control_group(
+                                                                "Classification and aggregate",
+                                                                radioButtons(
+                                                                        "classification_avg",
+                                                                        "Classification",
+                                                                        choices = c("ECOICOP ver. 2" = "ecoicop", "Special aggregates" = "sa", "Administered prices" = "ap"),
+                                                                        selected = "ecoicop"
+                                                                ),
+                                                                selectInput(
+                                                                        "coicop_avg",
+                                                                        "Select product category",
+                                                                        choices = setNames(label_set$coicop18_code, label_set$code_label),
+                                                                        multiple = FALSE
+                                                                ),
+                                                                uiOutput("avg_ecoicop_level_ui"),
+                                                                uiOutput("avg_component_selection_ui")
+                                                        ),
+                                                        control_group(
+                                                                "Contribution target",
+                                                                radioButtons(
+                                                                        "contribution_type_avg",
+                                                                        "Contribution to",
+                                                                        choices = c(
+                                                                                "selected higher aggregate" = "selected higher aggregate",
+                                                                                "all-items selected index" = "all-items HICP"
+                                                                        ),
+                                                                        selected = "selected higher aggregate"
+                                                                ),
+                                                                checkboxInput(
+                                                                        "avg_show_total_rate",
+                                                                        "Show aggregate annual rate (when available) and Other component",
+                                                                        value = TRUE
+                                                                ),
+                                                                note = "The average is calculated as an arithmetic mean of monthly M/M-12 rates and contributions over the selected period. If unchecked, the aggregate rate marker and any Other component are hidden and the y-axis is scaled to the displayed contributions."
+                                                        ),
+                                                        actionButton("update_avg", "Retrieve data", class = "primary-action-btn"),
+                                                        uiOutput("avg_data_status"),
+                                                        conditionalPanel(
+                                                                condition = "input.update_avg > 0",
+                                                                control_group(
+                                                                        "Period range",
+                                                                        uiOutput("avg_period_range_ui"),
+                                                                        actionButton("update_avg_plot", "Update plot", class = "primary-action-btn"),
+                                                                        note = "Both endpoints are included. Changing the range does not redraw the chart until you click Update plot."
+                                                                )
+                                                        ),
+                                                        download_panel("output.plot_avg", "downloadData_avg")
+                                                )
+                                        ),
+                                        column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot_avg")))
+                                )
+                        )
+                ),
+                tabPanel(
                         "Seasonality",
                         tags$div(
                                 class = "app-tab-page",
@@ -610,7 +737,7 @@ body { background: #fbfdfc; }
                                         tags$div(
                                                 class = "help-hero",
                                                 tags$span(class = "help-badge", "User guide"),
-                                                tags$h2("HICP Voyager 2.3"),
+                                                tags$h2("HICP Voyager 2.4"),
                                                 tags$p(
                                                         "HICP Voyager is an interactive dashboard for exploring European consumer price statistics. ",
                                                         "The app lets you analyse HICP indices, HICP-CT indices, monthly and annual rates of change, ",

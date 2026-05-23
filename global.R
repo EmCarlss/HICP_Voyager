@@ -124,6 +124,7 @@ clean_eurostat_cache()
 new_plot_data <- FALSE
 new_rebased_data <- FALSE
 new_plot_ar_data <- FALSE
+new_plot_avg_data <- FALSE
 new_plot_w_data <- FALSE
 new_plot_mr_data <- FALSE
 new_plot_se_data <- FALSE
