@@ -56,7 +56,7 @@ function(input, output, session) {
         add_country_group_observers("se", "countries_se", session, input, country_groups)
         add_country_group_observers("weights", "countries_w", session, input, country_groups)
 
-        wrap_legend <- function(x, width = 45) {
+        wrap_legend <- function(x, width = 38) {
                 x %>%
                         stringr::str_wrap(width = width) %>%
                         gsub("\n", "<br>", .)
@@ -270,10 +270,11 @@ function(input, output, session) {
         subplot_dims <- function(
                 n_panels,
                 ncols = NULL,
-                container_width = 960,
-                min_ratio = 1.1,
-                max_ratio = 1.5,
-                target_ratio = 1.3
+                container_width = 1120,
+                target_ratio = 2.00,
+                min_panel_height = 245,
+                max_panel_height = 315,
+                min_total_height = 600
         ) {
                 if (is.null(ncols)) {
                         ncols <- if (n_panels == 1) 1 else 2
@@ -282,24 +283,252 @@ function(input, output, session) {
                 nrows <- ceiling(n_panels / ncols)
                 panel_width <- container_width / ncols
                 panel_height <- panel_width / target_ratio
-                min_height <- panel_width / max_ratio
-                max_height <- panel_width / min_ratio
-                panel_height <- max(min_height, min(panel_height, max_height))
+                panel_height <- max(min_panel_height, min(panel_height, max_panel_height))
 
-                # Plotly subplots need extra vertical room for row spacing,
-                # facet titles, tick labels and margins. The visual frame around
-                # the chart has intentionally been removed in the UI, but the page
-                # still needs to reserve enough height for multi-panel charts.
-                row_gap <- if (nrows > 1) (nrows - 1) * 70 else 0
-                outer_margin <- 90
-                total_height <- max(620, ceiling(nrows * panel_height + row_gap + outer_margin))
+                # Keep multi-country facet grids compact. Plotly's subplot()
+                # margin argument is a fraction of the total plot height; if the
+                # plot is very tall, the default creates large blank bands between
+                # rows. A small margin plus a per-row height gives stable spacing
+                # when the user selects many countries.
+                subplot_margin <- if (nrows > 1) 0.006 else 0.02
+                outer_margin <- 95
+                total_height <- max(min_total_height, ceiling(nrows * panel_height + outer_margin))
 
                 list(
                         ncols = ncols,
                         nrows = nrows,
                         panel_width = panel_width,
                         panel_height = panel_height,
+                        subplot_margin = subplot_margin,
                         total_height = total_height
+                )
+        }
+
+        contribution_legend_layout <- function(traceorder = "normal") {
+                list(
+                        traceorder = traceorder,
+                        font = list(size = 10.5),
+                        bgcolor = "rgba(255,255,255,0)",
+                        # Keep the legend outside the plotting panels, but wrap
+                        # labels more tightly so the panels keep more horizontal room.
+                        x = 1.012,
+                        xanchor = "left",
+                        y = 1
+                )
+        }
+
+        contribution_plot_margin <- function(right = 190) {
+                list(l = 66, r = right, t = 44, b = 70)
+        }
+
+        subplot_margin_fraction <- function(total_height, gap_px = 36, min_fraction = 0.006, max_fraction = 0.075) {
+                # plotly::subplot() uses a fraction of the total plot height as
+                # row spacing. Convert from pixels so large facet grids do not get
+                # huge white bands, while small grids still leave room for x-axis
+                # tick labels between rows.
+                if (is.null(total_height) || !is.finite(total_height) || total_height <= 0) {
+                        return(min_fraction)
+                }
+                max(min_fraction, min(max_fraction, gap_px / total_height))
+        }
+
+        axis_name <- function(prefix, i) {
+                if (i == 1) prefix else paste0(prefix, i)
+        }
+
+        balance_subplot_grid <- function(
+                plotly_obj,
+                n_panels,
+                ncols = 2,
+                row_gap = 0.025,
+                title_pad = 0.004,
+                panel_titles = NULL
+        ) {
+                # Keep Plotly's own subplot domains intact. This helper only
+                # rebuilds panel labels. With shareX/shareY enabled, Plotly often
+                # creates fewer explicit axis objects than there are subplot
+                # panels. Looking up yaxis1, yaxis2, ... panel-by-panel can then
+                # label only every second panel. Instead, derive the unique column
+                # x-domains and row y-domains from the axes Plotly actually
+                # created, then combine them into a regular row/column label grid.
+
+                if (is.null(n_panels) || n_panels < 1) return(plotly_obj)
+
+                nrows <- ceiling(n_panels / ncols)
+
+                fallback_x_domain <- function(col) {
+                        col_gap <- 0.035
+                        panel_width <- (1 - col_gap * (ncols - 1)) / ncols
+                        x_left <- (col - 1) * (panel_width + col_gap)
+                        c(x_left, x_left + panel_width)
+                }
+
+                fallback_y_domain <- function(row) {
+                        row_gap_safe <- max(0, min(row_gap, 0.12))
+                        panel_height <- (1 - row_gap_safe * (nrows - 1)) / nrows
+                        y_top <- 1 - (row - 1) * (panel_height + row_gap_safe)
+                        c(max(0, y_top - panel_height), min(1, y_top))
+                }
+
+                extract_domains <- function(prefix, target_count, fallback_fun, sort_axis = c("x", "y")) {
+                        sort_axis <- match.arg(sort_axis)
+                        layout_names <- names(plotly_obj$x$layout)
+                        if (is.null(layout_names)) {
+                                return(lapply(seq_len(target_count), fallback_fun))
+                        }
+
+                        axis_names <- layout_names[grepl(paste0("^", prefix, "[0-9]*$"), layout_names)]
+                        domains <- list()
+
+                        for (axis_nm in axis_names) {
+                                axis_obj <- plotly_obj$x$layout[[axis_nm]]
+                                domain <- axis_obj$domain
+                                if (!is.null(domain) && length(domain) == 2 && all(is.finite(domain))) {
+                                        domains[[length(domains) + 1]] <- as.numeric(domain)
+                                }
+                        }
+
+                        if (length(domains) == 0) {
+                                return(lapply(seq_len(target_count), fallback_fun))
+                        }
+
+                        domain_df <- data.frame(
+                                start = vapply(domains, function(x) x[1], numeric(1)),
+                                end = vapply(domains, function(x) x[2], numeric(1))
+                        )
+                        domain_df$key <- paste(round(domain_df$start, 5), round(domain_df$end, 5), sep = ":")
+                        domain_df <- domain_df[!duplicated(domain_df$key), , drop = FALSE]
+
+                        if (sort_axis == "x") {
+                                domain_df <- domain_df[order(domain_df$start, domain_df$end), , drop = FALSE]
+                        } else {
+                                domain_df <- domain_df[order(-domain_df$end, -domain_df$start), , drop = FALSE]
+                        }
+
+                        if (nrow(domain_df) < target_count) {
+                                return(lapply(seq_len(target_count), fallback_fun))
+                        }
+
+                        lapply(seq_len(target_count), function(i) c(domain_df$start[i], domain_df$end[i]))
+                }
+
+                # Let axes manage their own margins, but do not rewrite their domains.
+                axis_names <- names(plotly_obj$x$layout)
+                axis_names <- axis_names[grepl("^[xy]axis[0-9]*$", axis_names)]
+                for (axis_nm in axis_names) {
+                        plotly_obj$x$layout[[axis_nm]]$automargin <- TRUE
+                }
+
+                if (is.null(panel_titles)) return(plotly_obj)
+
+                x_domains <- extract_domains("xaxis", ncols, fallback_x_domain, sort_axis = "x")
+                y_domains <- extract_domains("yaxis", nrows, fallback_y_domain, sort_axis = "y")
+
+                rebuilt_annotations <- list()
+
+                for (i in seq_len(n_panels)) {
+                        if (length(panel_titles) < i) next
+
+                        col <- ((i - 1) %% ncols) + 1
+                        row <- ceiling(i / ncols)
+
+                        x_domain <- x_domains[[col]]
+                        y_domain <- y_domains[[row]]
+
+                        rebuilt_annotations[[length(rebuilt_annotations) + 1]] <- list(
+                                text = as.character(panel_titles[[i]]),
+                                x = mean(x_domain),
+                                y = max(0, min(1, y_domain[2] - title_pad)),
+                                xref = "paper",
+                                yref = "paper",
+                                xanchor = "center",
+                                yanchor = "top",
+                                align = "center",
+                                showarrow = FALSE,
+                                font = list(size = 10.5, color = "#2f3a3d"),
+                                bgcolor = "rgba(255,255,255,0.78)",
+                                borderpad = 2
+                        )
+                }
+
+                plotly_obj$x$layout$annotations <- rebuilt_annotations
+                plotly_obj
+        }
+
+        show_all_subplot_x_ticklabels <- function(plotly_obj, tickangle = NULL, tickformat = NULL, tickvals = NULL, ticktext = NULL, dtick = NULL) {
+                axis_names <- names(plotly_obj$x$layout)
+                axis_names <- axis_names[grepl("^xaxis[0-9]*$", axis_names)]
+
+                for (axis_name_value in axis_names) {
+                        plotly_obj$x$layout[[axis_name_value]]$showticklabels <- TRUE
+                        plotly_obj$x$layout[[axis_name_value]]$automargin <- TRUE
+                        plotly_obj$x$layout[[axis_name_value]]$tickfont <- list(size = 9.5)
+
+                        if (!is.null(tickangle)) {
+                                plotly_obj$x$layout[[axis_name_value]]$tickangle <- tickangle
+                        }
+
+                        if (!is.null(tickformat)) {
+                                plotly_obj$x$layout[[axis_name_value]]$tickformat <- tickformat
+                        }
+
+                        if (!is.null(dtick)) {
+                                plotly_obj$x$layout[[axis_name_value]]$dtick <- dtick
+                        }
+
+                        if (!is.null(tickvals)) {
+                                plotly_obj$x$layout[[axis_name_value]]$tickmode <- "array"
+                                plotly_obj$x$layout[[axis_name_value]]$tickvals <- tickvals
+                        }
+
+                        if (!is.null(ticktext)) {
+                                plotly_obj$x$layout[[axis_name_value]]$ticktext <- ticktext
+                        }
+                }
+
+                plotly_obj
+        }
+
+        contribution_subplot_dims <- function(n_panels, ncols = NULL) {
+                # Compact default sizing for contribution and weight subplots.
+                # This is still used for period-based comparisons and weights,
+                # where a lower panel height keeps overview charts efficient.
+                subplot_dims(
+                        n_panels = n_panels,
+                        ncols = ncols,
+                        container_width = 1160,
+                        target_ratio = 2.05,
+                        min_panel_height = 245,
+                        max_panel_height = 315,
+                        min_total_height = 600
+                )
+        }
+
+        contribution_country_subplot_dims <- function(n_panels, ncols = NULL) {
+                # Near-square country facets for M/M-1 and M/M-12. These charts
+                # show stacked component contributions inside each country panel;
+                # when the panels are too flat, small positive and negative
+                # contributions visually disappear. With two columns, this gives
+                # panels of roughly 500 px height on a normal desktop viewport.
+                subplot_dims(
+                        n_panels = n_panels,
+                        ncols = ncols,
+                        container_width = 1160,
+                        target_ratio = 1.15,
+                        min_panel_height = 430,
+                        max_panel_height = 520,
+                        min_total_height = 780
+                )
+        }
+
+        seasonality_legend_layout <- function() {
+                list(
+                        traceorder = "reversed",
+                        font = list(size = 10.5),
+                        bgcolor = "rgba(255,255,255,0)",
+                        x = 1.012,
+                        xanchor = "left",
+                        y = 1
                 )
         }
 
@@ -896,7 +1125,7 @@ function(input, output, session) {
                                 code_label_wrapped = ifelse(
                                         is.na(code_label),
                                         NA_character_,
-                                        wrap_legend(code_label, width = 42)
+                                        wrap_legend(code_label, width = 38)
                                 )
                         )
         })
@@ -977,7 +1206,7 @@ function(input, output, session) {
                                         ) %>%
                                                 layout(
                                                         yaxis = list(range = c(0, max_weight * 1.05), title = "Weight, per mille"),
-                                                        xaxis = list(title = ""),
+                                                        xaxis = list(title = "", tickformat = "%Y"),
                                                         barmode = "stack",
                                                         annotations = list(
                                                                 text = geo_value,
@@ -1075,24 +1304,42 @@ function(input, output, session) {
                                 }
                         }
 
-                        dims <- subplot_dims(length(subplots))
+                        dims <- contribution_subplot_dims(length(subplots))
+                        subplot_gap <- if (identical(input$weights_view, "country") && length(subplots) > 1) {
+                                subplot_margin_fraction(dims$total_height, gap_px = 38)
+                        } else {
+                                dims$subplot_margin
+                        }
+
                         layout <- plotly::subplot(
                                 subplots,
                                 nrows = dims$nrows,
+                                margin = subplot_gap,
                                 titleX = TRUE,
                                 shareX = input$weights_view == "country",
                                 titleY = TRUE,
                                 shareY = TRUE
                         ) %>%
                                 layout(
-                                        autosize = FALSE,
+                                        autosize = TRUE,
                                         height = dims$total_height,
                                         font = list(size = 11),
-                                        legend = list(traceorder = "normal", font = list(size = 11), x = 1.02, y = 1),
-                                        margin = list(r = 180)
-                                )
+                                        legend = contribution_legend_layout("normal"),
+                                        margin = contribution_plot_margin()
+                                ) %>%
+                                config(responsive = TRUE)
 
                         plotly_plot_w <- plotly_build(layout)
+                        plotly_plot_w <- balance_subplot_grid(
+                                plotly_plot_w,
+                                n_panels = length(subplots),
+                                ncols = dims$ncols,
+                                row_gap = subplot_gap,
+                                panel_titles = names(subplots)
+                        )
+                        if (identical(input$weights_view, "country")) {
+                                plotly_plot_w <- show_all_subplot_x_ticklabels(plotly_plot_w, tickformat = "%Y")
+                        }
                         plotly_plot_w$x$attrs$legend$x$class <- "plot-container"
                         plotly_plot_w
                 })
@@ -1381,28 +1628,74 @@ function(input, output, session) {
                 result_jTOT <- left_join(result_j, data_I_TARGET, by = c("time", "geo")) %>%
                         mutate(year = year(time), month = month(time))
 
+                # Previous-month component and target indices.
                 data_mmin1 <- result_jTOT %>%
                         mutate(
                                 year = ifelse(month == 12, year + 1, year),
                                 month = ifelse(month == 12, 1, month %% 12 + 1)
                         ) %>%
-                        select(-any_of(c("time", "WT_j"))) %>%
-                        rename(IX_TOT_m_mmin1 = IX_TOT, IX_j_m_mmin1 = IX_j)
+                        transmute(
+                                year,
+                                month,
+                                geo,
+                                coicop18,
+                                IX_TOT_m_mmin1 = IX_TOT,
+                                IX_j_m_mmin1 = IX_j
+                        )
 
-                result_jTOT2 <- left_join(result_jTOT, data_mmin1, by = c("year", "month", "geo", "coicop18")) %>%
+                # December Y-1 component index, used to price-update weights in a
+                # chain-linked way. This is more consistent with HICP monthly
+                # aggregation than updating weights only by IX_j,t-1 / IX_A,t-1,
+                # especially for strongly seasonal components such as CP11.
+                dec_data_ymin1 <- result_jTOT %>%
+                        filter(month == 12) %>%
+                        transmute(
+                                year = year + 1,
+                                geo,
+                                coicop18,
+                                IX_j_dec_ymin1 = IX_j,
+                                IX_TOT_dec_ymin1 = IX_TOT
+                        )
+
+                result_jTOT2 <- result_jTOT %>%
+                        left_join(
+                                data_mmin1,
+                                by = c("year", "month", "geo", "coicop18")
+                        ) %>%
+                        left_join(
+                                dec_data_ymin1,
+                                by = c("year", "geo", "coicop18")
+                        ) %>%
+                        group_by(time, geo) %>%
                         mutate(
+                                weight_share = WT_j / 1000,
+                                link_j_mmin1 = IX_j_m_mmin1 / IX_j_dec_ymin1,
+                                link_j = IX_j / IX_j_dec_ymin1,
+                                chain_denominator = sum(
+                                        weight_share * link_j_mmin1,
+                                        na.rm = TRUE
+                                ),
                                 weight_j_mmin1 = if_else(
-                                        is.na(WT_j) | is.na(IX_j_m_mmin1) | is.na(IX_TOT_m_mmin1),
+                                        is.na(WT_j) |
+                                                is.na(IX_j_m_mmin1) |
+                                                is.na(IX_j_dec_ymin1) |
+                                                is.na(chain_denominator) |
+                                                chain_denominator <= 0,
                                         NA_real_,
-                                        (WT_j / 1000) * (IX_j_m_mmin1 / IX_TOT_m_mmin1)
+                                        weight_share * link_j_mmin1 / chain_denominator
                                 ),
                                 mr_j = if_else(
                                         is.na(IX_j) | is.na(IX_j_m_mmin1),
                                         NA_real_,
                                         (IX_j / IX_j_m_mmin1 - 1) * 100
                                 ),
-                                Contr_j = mr_j * weight_j_mmin1
-                        )
+                                Contr_j = if_else(
+                                        is.na(mr_j) | is.na(weight_j_mmin1),
+                                        NA_real_,
+                                        mr_j * weight_j_mmin1
+                                )
+                        ) %>%
+                        ungroup()
 
                 result_jTOT2 <- full_join(result_jTOT2, data_MR, by = c("year", "time", "month", "geo", "coicop18"))
 
@@ -1431,7 +1724,7 @@ function(input, output, session) {
                         left_join(label_set_mr, by = c("coicop18" = "coicop18_code")) %>%
                         mutate(
                                 code_label = ifelse(coicop18 == target_coicop, NA_character_, code_label),
-                                code_label_wrapped = ifelse(is.na(code_label), NA_character_, wrap_legend(code_label, width = 45))
+                                code_label_wrapped = ifelse(is.na(code_label), NA_character_, wrap_legend(code_label, width = 38))
                         )
         })
 
@@ -1467,9 +1760,9 @@ function(input, output, session) {
                 if (input$mr_view == "period") {
                         default_periods <- format(latest_time, "%Y %B")
                 } else {
-                        wanted_times <- latest_time - 0:4
+                        wanted_times <- latest_time - 0:7
                         default_periods <- format(available_times[available_times %in% wanted_times], "%Y %B")
-                        if (length(default_periods) < 5) default_periods <- format(latest_time, "%Y %B")
+                        if (length(default_periods) < 8) default_periods <- format(latest_time, "%Y %B")
                 }
 
                 list(choices = period_list, selected = default_periods)
@@ -1588,21 +1881,24 @@ function(input, output, session) {
                                         subplots[[period_label]] <- subpl
                                 }
 
-                                dims <- subplot_dims(length(subplots))
+                                dims <- contribution_subplot_dims(length(subplots))
                                 layout <- plotly::subplot(
                                         subplots,
                                         nrows = dims$nrows,
+                                        margin = dims$subplot_margin,
                                         titleX = TRUE,
                                         shareX = FALSE,
                                         titleY = TRUE,
                                         shareY = TRUE
                                 ) %>%
                                         layout(
-                                                autosize = FALSE,
+                                                autosize = TRUE,
                                                 height = dims$total_height,
                                                 font = list(size = 11),
-                                                legend = list(traceorder = "normal")
-                                        )
+                                                legend = contribution_legend_layout("normal"),
+                                                margin = contribution_plot_margin()
+                                        ) %>%
+                                        config(responsive = TRUE)
 
                                 plotly_plot_mr <- plotly_build(layout)
                                 plotly_plot_mr$x$attrs$legend$x$class <- "plot-container"
@@ -1624,8 +1920,9 @@ function(input, output, session) {
                                                 title = "",
                                                 tickmode = "array",
                                                 tickvals = x_axis_tick_labels,
-                                                ticktext = x_axis_tick_labels,
-                                                tickformat = "%Y %B"
+                                                ticktext = format(x_axis_tick_labels, "%Y %b"),
+                                                tickangle = 45,
+                                                automargin = TRUE
                                         )
 
                                         subpl <- add_styled_bar_traces(
@@ -1675,23 +1972,40 @@ function(input, output, session) {
                                         subplots[[geo_value]] <- subpl
                                 }
 
-                                dims <- subplot_dims(length(subplots))
+                                dims <- contribution_country_subplot_dims(length(subplots))
+                                subplot_gap <- if (length(subplots) > 1) {
+                                        subplot_margin_fraction(dims$total_height, gap_px = 56)
+                                } else {
+                                        dims$subplot_margin
+                                }
+
                                 layout <- plotly::subplot(
                                         subplots,
                                         nrows = dims$nrows,
+                                        margin = subplot_gap,
                                         titleX = TRUE,
                                         shareX = TRUE,
                                         titleY = TRUE,
                                         shareY = TRUE
                                 ) %>%
                                         layout(
-                                                autosize = FALSE,
+                                                autosize = TRUE,
                                                 height = dims$total_height,
                                                 font = list(size = 11),
-                                                legend = list(traceorder = "normal")
-                                        )
+                                                legend = contribution_legend_layout("normal"),
+                                                margin = contribution_plot_margin()
+                                        ) %>%
+                                        config(responsive = TRUE)
 
                                 plotly_plot_mr <- plotly_build(layout)
+                                plotly_plot_mr <- balance_subplot_grid(
+                                        plotly_plot_mr,
+                                        n_panels = length(subplots),
+                                        ncols = dims$ncols,
+                                        row_gap = subplot_gap,
+                                        panel_titles = names(subplots)
+                                )
+                                plotly_plot_mr <- show_all_subplot_x_ticklabels(plotly_plot_mr, tickangle = 45)
                                 plotly_plot_mr$x$attrs$legend$x$class <- "plot-container"
                                 return(plotly_plot_mr)
                         }
@@ -1815,7 +2129,7 @@ function(input, output, session) {
                         left_join(label_set_ar, by = c("coicop18" = "coicop18_code")) %>%
                         mutate(
                                 code_label = ifelse(coicop18 == target_coicop, NA_character_, code_label),
-                                code_label_wrapped = ifelse(is.na(code_label), NA_character_, wrap_legend(code_label, width = 45))
+                                code_label_wrapped = ifelse(is.na(code_label), NA_character_, wrap_legend(code_label, width = 38))
                         )
         })
 
@@ -1993,10 +2307,12 @@ function(input, output, session) {
                                                         showarrow = FALSE
                                                 ),
                                                 font = list(size = 11),
-                                                legend = list(traceorder = "normal"),
-                                                autosize = FALSE,
+                                                legend = contribution_legend_layout("normal"),
+                                                margin = contribution_plot_margin(),
+                                                autosize = TRUE,
                                                 height = 600
                                         ) %>%
+                                        config(responsive = TRUE) %>%
                                         plotly_build()
 
                                 plotly_plot_ar$x$attrs$legend$x$class <- "plot-container"
@@ -2034,7 +2350,7 @@ function(input, output, session) {
                                                                 y = 0.95,
                                                                 showarrow = FALSE
                                                         ),
-                                                        xaxis = list(tickformat = "%Y %B", tickangle = 45)
+                                                        xaxis = list(title = "", tickformat = "%Y", dtick = "M12", tickangle = 0, automargin = TRUE)
                                                 )
 
                                         if (input$contribution_type_ar == "selected higher aggregate") {
@@ -2056,32 +2372,49 @@ function(input, output, session) {
                                                                 showlegend = count == 1,
                                                                 legendrank = 1
                                                         ) %>%
-                                                        layout(xaxis = list(title = ""), yaxis = list(range = y_rng, title = selected_axis_ar))
+                                                        layout(xaxis = list(title = "", tickformat = "%Y", dtick = "M12", tickangle = 0, automargin = TRUE), yaxis = list(range = y_rng, title = selected_axis_ar))
                                         } else {
                                                 subpl <- subpl %>%
-                                                        layout(xaxis = list(title = ""), yaxis = list(range = y_rng, title = all_items_axis_ar))
+                                                        layout(xaxis = list(title = "", tickformat = "%Y", dtick = "M12", tickangle = 0, automargin = TRUE), yaxis = list(range = y_rng, title = all_items_axis_ar))
                                         }
 
                                         subplots[[geo_value]] <- subpl
                                 }
 
-                                dims <- subplot_dims(length(subplots))
+                                dims <- contribution_country_subplot_dims(length(subplots))
+                                subplot_gap <- if (length(subplots) > 1) {
+                                        subplot_margin_fraction(dims$total_height, gap_px = 56)
+                                } else {
+                                        dims$subplot_margin
+                                }
+
                                 layout <- plotly::subplot(
                                         subplots,
                                         nrows = dims$nrows,
+                                        margin = subplot_gap,
                                         titleX = TRUE,
                                         shareX = TRUE,
                                         titleY = TRUE,
                                         shareY = TRUE
                                 ) %>%
                                         layout(
-                                                autosize = FALSE,
+                                                autosize = TRUE,
                                                 height = dims$total_height,
                                                 font = list(size = 11),
-                                                legend = list(traceorder = "normal")
-                                        )
+                                                legend = contribution_legend_layout("normal"),
+                                                margin = contribution_plot_margin()
+                                        ) %>%
+                                        config(responsive = TRUE)
 
                                 plotly_plot_ar <- plotly_build(layout)
+                                plotly_plot_ar <- balance_subplot_grid(
+                                        plotly_plot_ar,
+                                        n_panels = length(subplots),
+                                        ncols = dims$ncols,
+                                        row_gap = subplot_gap,
+                                        panel_titles = names(subplots)
+                                )
+                                plotly_plot_ar <- show_all_subplot_x_ticklabels(plotly_plot_ar, tickangle = 0, tickformat = "%Y", dtick = "M12")
                                 plotly_plot_ar$x$attrs$legend$x$class <- "plot-container"
                                 return(plotly_plot_ar)
                         }
@@ -2234,9 +2567,16 @@ function(input, output, session) {
                         }
 
                         dims <- subplot_dims(length(subplots))
+                        subplot_gap <- if (length(subplots) > 1) {
+                                subplot_margin_fraction(dims$total_height, gap_px = 58)
+                        } else {
+                                dims$subplot_margin
+                        }
+
                         layout <- plotly::subplot(
                                 subplots,
                                 nrows = dims$nrows,
+                                margin = subplot_gap,
                                 titleX = TRUE,
                                 shareX = TRUE,
                                 titleY = TRUE,
@@ -2246,10 +2586,24 @@ function(input, output, session) {
                                         autosize = FALSE,
                                         height = dims$total_height,
                                         font = list(size = 11),
-                                        legend = list(traceorder = "reversed")
+                                        legend = seasonality_legend_layout(),
+                                        margin = list(l = 66, r = 150, t = 44, b = 70)
                                 )
 
                         plotly_plot_se <- plotly_build(layout)
+                        plotly_plot_se <- balance_subplot_grid(
+                                plotly_plot_se,
+                                n_panels = length(subplots),
+                                ncols = dims$ncols,
+                                row_gap = subplot_gap,
+                                panel_titles = names(subplots)
+                        )
+                        plotly_plot_se <- show_all_subplot_x_ticklabels(
+                                plotly_plot_se,
+                                tickangle = 45,
+                                tickvals = 0:12,
+                                ticktext = month_abbrev
+                        )
 
                         # Enforce the same tight range on all subplot y-axes after
                         # plotly has combined the individual panels. This avoids

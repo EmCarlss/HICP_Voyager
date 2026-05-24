@@ -25,24 +25,24 @@ eurostat_countries <- rbind(eu_countries, efta_countries, additional_areas) %>%
 
 country_group_buttons <- function(prefix) {
         tags$div(
-                style = "margin-bottom: 10px;",
-                tags$label("Country group quick selection:"),
-                br(),
-                actionButton(paste0(prefix, "_eu"), "EU", class = "quick-btn"),
-                actionButton(paste0(prefix, "_efta"), "EFTA", class = "quick-btn"),
-                actionButton(paste0(prefix, "_eu_efta"), "EU + EFTA", class = "quick-btn"),
-                actionButton(paste0(prefix, "_euro"), "Euro area", class = "quick-btn"),
-                actionButton(paste0(prefix, "_med"), "Mediterranean", class = "quick-btn"),
-                actionButton(paste0(prefix, "_nordic"), "Nordic", class = "quick-btn"),
-                actionButton(paste0(prefix, "_balkan"), "Balkan", class = "quick-btn"),
-                actionButton(paste0(prefix, "_baltic"), "Baltic", class = "quick-btn"),
-                br(),
-                actionButton(paste0(prefix, "_central"), "Central", class = "quick-btn"),
-                actionButton(paste0(prefix, "_eastern"), "Eastern", class = "quick-btn"),
-                actionButton(paste0(prefix, "_western"), "Western", class = "quick-btn"),
-                actionButton(paste0(prefix, "_benelux"), "Benelux", class = "quick-btn"),
-                br(),
-                actionButton(paste0(prefix, "_clear"), "Clear selection", class = "quick-btn-clear")
+                class = "quick-select",
+                tags$label(class = "quick-select-label", "Country group quick selection:"),
+                tags$div(
+                        class = "quick-btn-grid",
+                        actionButton(paste0(prefix, "_eu"), "EU", class = "quick-btn"),
+                        actionButton(paste0(prefix, "_efta"), "EFTA", class = "quick-btn"),
+                        actionButton(paste0(prefix, "_eu_efta"), "EU + EFTA", class = "quick-btn"),
+                        actionButton(paste0(prefix, "_euro"), "Euro area", class = "quick-btn"),
+                        actionButton(paste0(prefix, "_med"), "Mediterranean", class = "quick-btn quick-btn-wide"),
+                        actionButton(paste0(prefix, "_nordic"), "Nordic", class = "quick-btn"),
+                        actionButton(paste0(prefix, "_balkan"), "Balkan", class = "quick-btn"),
+                        actionButton(paste0(prefix, "_baltic"), "Baltic", class = "quick-btn"),
+                        actionButton(paste0(prefix, "_central"), "Central", class = "quick-btn"),
+                        actionButton(paste0(prefix, "_eastern"), "Eastern", class = "quick-btn"),
+                        actionButton(paste0(prefix, "_western"), "Western", class = "quick-btn"),
+                        actionButton(paste0(prefix, "_benelux"), "Benelux", class = "quick-btn"),
+                        actionButton(paste0(prefix, "_clear"), "Clear selection", class = "quick-btn-clear quick-btn-clear-wide")
+                )
         )
 }
 
@@ -85,7 +85,7 @@ ui <- fluidPage(
         tags$style(HTML("
 body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%); }
 .app-header {
-  max-width: 1250px;
+  max-width: 1450px;
   margin: 12px auto 10px auto;
   padding: 15px 22px;
   background: radial-gradient(circle at top left, rgba(63,143,122,0.075) 0, rgba(63,143,122,0.022) 35%, transparent 62%), linear-gradient(135deg, #f9fcfb 0%, #f3faf7 100%);
@@ -113,12 +113,12 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
 .app-logo { width: 100%; height: 100%; object-fit: cover; padding: 0; display: block; }
 .app-kicker { font-size: 11.5px; font-weight: 800; color: #3f8f7a; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 3px; }
 .app-title { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.035em; color: #20322f; line-height: 1.05; }
-.app-subtitle { margin-top: 6px; margin-bottom: 0; max-width: 780px; font-size: 14.2px; line-height: 1.45; color: #526064; }
+.app-subtitle { margin-top: 6px; margin-bottom: 0; max-width: 900px; font-size: 14.2px; line-height: 1.45; color: #526064; }
 .app-header-badges { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; flex: 0 0 auto; }
 .app-version-pill, .app-meta-pill { display: inline-block; border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .app-version-pill { background: #3f8f7a; color: white; border: 1px solid #337968; }
 .app-meta-pill { background: #ffffff; color: #34514b; border: 1px solid #d7e7e2; }
-.navbar { max-width: 1250px; margin: 0 auto 14px auto !important; padding: 7px 12px !important; background: rgba(255,255,255,0.97) !important; border: 1px solid #e1e7e5 !important; border-radius: 17px !important; box-shadow: 0 2px 10px rgba(32,50,47,0.035); min-height: unset !important; }
+.navbar { max-width: 1450px; margin: 0 auto 14px auto !important; padding: 7px 12px !important; background: rgba(255,255,255,0.97) !important; border: 1px solid #e1e7e5 !important; border-radius: 17px !important; box-shadow: 0 2px 10px rgba(32,50,47,0.035); min-height: unset !important; }
 .navbar .container-fluid, .navbar .container { padding-left: 0 !important; padding-right: 0 !important; }
 .navbar-brand { display: none !important; }
 .navbar-brand-custom { display: inline-flex; align-items: center; gap: 8px; }
@@ -134,14 +134,15 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
 .plot-card {
   position: relative;
   background: transparent;
-  border: none;
+  border: 0;
   border-radius: 0;
   box-shadow: none;
   padding: 0;
-  min-height: 620px;
+  min-height: 0;
   overflow: visible;
 }
-.plot-card::before {
+.plot-card::before { display: none; }
+.plot-card:not(.has-plot):not(:has(.js-plotly-plot))::before {
   content: 'Select settings and retrieve data to display chart';
   position: absolute;
   inset: 0;
@@ -153,44 +154,66 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
   text-align: center;
   color: #6d7a7e;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 650;
   letter-spacing: 0.01em;
-  background: #ffffff;
+  background: linear-gradient(135deg, #fbfdfc 0%, #f5faf8 100%);
   border: 1px dashed #d7e7e2;
-  border-radius: 16px;
+  border-radius: 14px;
   pointer-events: none;
-  z-index: 0;
+  z-index: 2;
 }
-.plot-card.has-plot::before,
-.plot-card:has(.js-plotly-plot)::before { display: none; }
+.plot-card:has(.recalculating)::after {
+  content: 'Updating chart…';
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 5;
+  border-radius: 999px;
+  padding: 6px 11px;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid #d7e7e2;
+  box-shadow: 0 4px 12px rgba(32,50,47,0.07);
+  color: #34514b;
+  font-size: 12px;
+  font-weight: 700;
+}
 .plot-card > .html-widget-output,
 .plot-card > .shiny-plot-output {
   position: relative;
   z-index: 1;
-  min-height: 620px;
-  height: 620px;
   width: 100%;
   overflow: visible;
 }
-.plot-card .js-plotly-plot {
+.plot-card .plotly,
+.plot-card .js-plotly-plot,
+.plot-card .svg-container {
+  width: 100% !important;
   max-width: 100%;
   overflow: visible;
 }
+.plot-card .main-svg { overflow: visible; }
 .plot-container .legend .traces .legendtext { white-space: normal !important; word-break: break-word !important; }
+.quick-select { margin-bottom: 10px; }
+.quick-select-label { display: block; margin-bottom: 8px; }
+.quick-btn-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.quick-btn, .quick-btn-clear {
+  width: 100%;
+  min-height: 34px;
+  margin: 0 !important;
+  border-radius: 10px !important;
+  padding: 6px 9px !important;
+  font-size: 12.6px !important;
+  font-weight: 650 !important;
+  line-height: 1.15 !important;
+  transition: all 0.14s ease-in-out;
+}
 .quick-btn {
   background-color: #fbfdfc !important;
   color: #3f4a4d !important;
   border: 1px solid #d8e3e0 !important;
-  border-radius: 10px !important;
-  padding: 6px 12px !important;
-  min-height: 32px;
-  font-size: 12.8px !important;
-  font-weight: 600 !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.75), 0 1px 2px rgba(32,50,47,0.025) !important;
-  margin-right: 5px;
-  margin-bottom: 7px;
-  transition: all 0.14s ease-in-out;
 }
+.quick-btn-wide { grid-column: span 2; }
 .quick-btn:hover {
   background-color: #eef7f4 !important;
   border-color: #c8dfd8 !important;
@@ -202,16 +225,14 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
   background-color: #ffffff !important;
   color: #6c777a !important;
   border: 1px solid #d8e3e0 !important;
-  border-radius: 10px !important;
-  padding: 6px 12px !important;
-  min-height: 32px;
-  font-size: 12.8px !important;
-  font-weight: 600 !important;
   box-shadow: none !important;
-  margin-top: 4px;
 }
+.quick-btn-clear-wide { grid-column: 1 / -1; }
 .quick-btn-clear:hover { background-color: #f6faf8 !important; color: #4d5a5d !important; border-color: #cbdad6 !important; }
-.app-tab-page { max-width: 1250px; margin: 0 auto; padding: 14px 8px 40px 8px; color: #263238; }
+.app-tab-page { max-width: 1450px; margin: 0 auto; padding: 14px 8px 40px 8px; color: #263238; }
+.app-tab-page > .row { display: flex; align-items: flex-start; gap: 18px; margin-left: 0; margin-right: 0; }
+.app-tab-page > .row > [class*='col-']:first-child { padding-left: 0; padding-right: 0; flex: 0 0 330px; max-width: 330px; float: none; }
+.app-tab-page > .row > [class*='col-']:last-child { padding-left: 0; padding-right: 0; flex: 1 1 0; max-width: none; float: none; }
 .tab-hero { background: rgba(255,255,255,0.82); border: 1px solid #e1ebe7; border-radius: 16px; padding: 16px 22px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(32,50,47,0.025), inset 0 1px 0 rgba(255,255,255,0.82); }
 .tab-hero h2 { margin-top: 0; margin-bottom: 5px; font-size: 22px; font-weight: 750; letter-spacing: -0.02em; }
 .tab-hero p { margin-bottom: 0; font-size: 13.8px; line-height: 1.5; max-width: 900px; }
@@ -233,6 +254,20 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
   border-color: #9ecdc0 !important;
   box-shadow: 0 0 0 3px rgba(63,143,122,0.12) !important;
 }
+.control-card .selectize-control.multi .selectize-input {
+  max-height: 158px;
+  overflow-y: auto;
+  padding: 7px 8px !important;
+}
+.control-card .selectize-control.multi .selectize-input > div {
+  background: #edf7f4 !important;
+  border: 1px solid #d2e7df !important;
+  border-radius: 7px !important;
+  color: #263b37 !important;
+  margin: 2px 3px 2px 0 !important;
+  padding: 2px 6px !important;
+}
+.control-card .selectize-dropdown { border-radius: 10px !important; border-color: #d8e3e0 !important; box-shadow: 0 8px 20px rgba(32,50,47,0.08) !important; }
 .checkbox label, .radio label { font-weight: 500; color: #3f4a4d; }
 
 .primary-action-btn { width: 100%; background-color: #3f8f7a !important; color: white !important; border: 1px solid #337968 !important; border-radius: 10px !important; padding: 8px 12px !important; font-weight: 700 !important; margin-top: 10px; }
@@ -268,10 +303,11 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
   .navbar { margin-left: 8px !important; margin-right: 8px !important; padding: 7px 8px !important; }
   .navbar-nav .nav-link, .navbar-nav > li > a { border-radius: 10px !important; margin: 3px 0 !important; }
   .tab-hero { padding: 15px 16px; }
-  .plot-card { min-height: 480px; padding: 0; }
-  .plot-card::before { min-height: 300px; }
-  .plot-card > .html-widget-output,
-  .plot-card > .shiny-plot-output { min-height: 480px; height: 480px; }
+  .app-tab-page > .row { display: block; }
+  .app-tab-page > .row > [class*='col-']:first-child,
+  .app-tab-page > .row > [class*='col-']:last-child { max-width: none; width: 100%; padding-left: 0; padding-right: 0; }
+  .plot-card { min-height: 0; padding: 0; }
+  .plot-card:not(.has-plot):not(:has(.js-plotly-plot))::before { min-height: 300px; }
 }
 @media (max-width: 520px) {
   .app-brand-block { align-items: center; }
@@ -294,7 +330,10 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
     var plotHeight = Math.max(layoutHeight, boxHeight, gd.offsetHeight || 0);
     if (!plotHeight) return;
 
-    var reservedHeight = Math.ceil(plotHeight + 18);
+    // Let the wrapper follow Plotly's actual layout height. This is important
+    // because the app can render anything from one plot to a large grid of
+    // country/period panels.
+    var reservedHeight = Math.ceil(plotHeight);
 
     if (output) {
       output.style.height = reservedHeight + 'px';
@@ -303,7 +342,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
     }
     if (card) {
       card.classList.add('has-plot');
-      card.style.minHeight = reservedHeight + 'px';
+      card.style.minHeight = '0px';
       card.style.overflow = 'visible';
     }
   }
@@ -1096,6 +1135,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                         tags$tr(tags$td("\\(j\\)"), tags$td("Lower-level component, for example a COICOP subclass, special aggregate or administered-price component.")),
                                                         tags$tr(tags$td("\\(A\\)"), tags$td("Target aggregate. This is either the selected higher aggregate or all-items selected index, depending on selected contribution mode.")),
                                                         tags$tr(tags$td("\\(I_{j,t}\\)"), tags$td("Index for component \\(j\\) in month \\(t\\).")),
+                                                        tags$tr(tags$td("\\(I_{j,12,y-1}\\)"), tags$td("Index for component \\(j\\) in December of the previous year.")),
                                                         tags$tr(tags$td("\\(I_{A,t}\\)"), tags$td("Index for the target aggregate \\(A\\) in month \\(t\\).")),
                                                         tags$tr(tags$td("\\(w_{j,y}^{A}\\)"), tags$td("Annual weight for component \\(j\\), expressed in per mille relative to the target aggregate \\(A\\).")),
                                                         tags$tr(tags$td("\\(m,y\\)"), tags$td("Month \\(m\\) in year \\(y\\)."))
@@ -1108,13 +1148,31 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                 tags$div("$$", "w_{j,y}^{A} = w_{j,y}^{00}", "$$"),
 
                                                 tags$h4("Monthly contribution, M/M-1"),
-                                                tags$p("First, the annual weight is price-updated to the previous month:"),
-                                                tags$div("$$", "\\widetilde{w}_{j,t-1}^{A} = ", "\\frac{w_{j,y}^{A}}{1000} \\times ", "\\frac{I_{j,t-1}}{I_{A,t-1}}", "$$"),
+                                                tags$p(
+                                                        "For M/M-1, the app price-updates each component weight using the component index linked to December of the previous year. ",
+                                                        "For a month \\(m\\) in year \\(y\\), the relevant price reference is therefore December \\(y-1\\), not only the raw level in the previous month. ",
+                                                        "This mirrors the chain-linked HICP structure and gives more reliable contributions for strongly seasonal components."
+                                                ),
+                                                tags$p("The component links from December Y-1 to the current month and to the previous month are:"),
+                                                tags$div("$$", "L_{j,m,y} = ", "\\frac{I_{j,m,y}}{I_{j,12,y-1}}", "$$"),
+                                                tags$div("$$", "L_{j,m-1,y} = ", "\\frac{I_{j,m-1,y}}{I_{j,12,y-1}}", "$$"),
+                                                tags$p(
+                                                        "For January, the previous month is December \\(y-1\\), so \\(L_{j,m-1,y}=1\\). ",
+                                                        "The same December reference is used for all components within the year."
+                                                ),
+                                                tags$p("The price-updated links are then normalised across the lower-level components included in the selected contribution target:"),
+                                                tags$div("$$", "D_{m-1,y}^{A} = ", "\\sum_{k \\in A} ", "\\frac{w_{k,y}^{A}}{1000} \\times L_{k,m-1,y}", "$$"),
+                                                tags$div("$$", "\\widetilde{w}_{j,m-1,y}^{A} = ", "\\frac{\\frac{w_{j,y}^{A}}{1000} \\times L_{j,m-1,y}}{D_{m-1,y}^{A}}", "$$"),
                                                 tags$p("The monthly rate of change for component \\(j\\) is:"),
-                                                tags$div("$$", "r_{j,t}^{m} = ", "\\left( \\frac{I_{j,t}}{I_{j,t-1}} - 1 \\right) \\times 100", "$$"),
+                                                tags$div("$$", "r_{j,m,y}^{m} = ", "\\left( \\frac{I_{j,m,y}}{I_{j,m-1,y}} - 1 \\right) \\times 100", "$$"),
                                                 tags$p("The monthly contribution from component \\(j\\) is then:"),
-                                                tags$div("$$", "C_{j,t}^{m} = ", "\\widetilde{w}_{j,t-1}^{A} \\times r_{j,t}^{m}", "$$"),
-                                                tags$p("This is the formula used in the M/M-1 tab. In the graph, contributions are shown in percentage points."),
+                                                tags$div("$$", "C_{j,m,y}^{m} = ", "\\widetilde{w}_{j,m-1,y}^{A} \\times r_{j,m,y}^{m}", "$$"),
+                                                tags$p("Equivalently, the same contribution can be written directly with the December-linked index movement:"),
+                                                tags$div("$$", "C_{j,m,y}^{m} = ", "100 \\times ", "\\frac{\\frac{w_{j,y}^{A}}{1000} \\times \\left(L_{j,m,y} - L_{j,m-1,y}\\right)}{D_{m-1,y}^{A}}", "$$"),
+                                                tags$p(
+                                                        "This is the formula used in the M/M-1 tab. In the graph, contributions are shown in percentage points. ",
+                                                        "The normalisation step makes the price-updated component weights sum to one before the contributions are calculated."
+                                                ),
 
                                                 tags$h4("Annual contribution, M/M-12"),
                                                 tags$p(
