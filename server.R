@@ -521,6 +521,22 @@ function(input, output, session) {
                 )
         }
 
+        seasonality_country_subplot_dims <- function(n_panels, ncols = NULL) {
+                # Seasonality uses one panel per country, just like the M/M
+                # by-country views. The panels need to be substantially taller
+                # than the generic subplot default so the within-year line paths
+                # remain readable when many countries are selected.
+                subplot_dims(
+                        n_panels = n_panels,
+                        ncols = ncols,
+                        container_width = 1160,
+                        target_ratio = 1.18,
+                        min_panel_height = 410,
+                        max_panel_height = 500,
+                        min_total_height = 760
+                )
+        }
+
         seasonality_legend_layout <- function() {
                 list(
                         traceorder = "reversed",
@@ -2566,9 +2582,9 @@ function(input, output, session) {
                                 subplots[[geo_value]] <- subpl
                         }
 
-                        dims <- subplot_dims(length(subplots))
+                        dims <- seasonality_country_subplot_dims(length(subplots))
                         subplot_gap <- if (length(subplots) > 1) {
-                                subplot_margin_fraction(dims$total_height, gap_px = 58)
+                                subplot_margin_fraction(dims$total_height, gap_px = 56)
                         } else {
                                 dims$subplot_margin
                         }
@@ -2583,12 +2599,13 @@ function(input, output, session) {
                                 shareY = TRUE
                         ) %>%
                                 layout(
-                                        autosize = FALSE,
+                                        autosize = TRUE,
                                         height = dims$total_height,
                                         font = list(size = 11),
                                         legend = seasonality_legend_layout(),
-                                        margin = list(l = 66, r = 150, t = 44, b = 70)
-                                )
+                                        margin = list(l = 66, r = 150, t = 44, b = 82)
+                                ) %>%
+                                config(responsive = TRUE)
 
                         plotly_plot_se <- plotly_build(layout)
                         plotly_plot_se <- balance_subplot_grid(
