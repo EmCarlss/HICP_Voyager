@@ -1,0 +1,26 @@
+name: Package HICP Voyager deployment ZIP
+
+on:
+  push:
+    branches:
+      - chore/deployment-zip-2026-11-07
+
+jobs:
+  deployment-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload only Shiny deployment files
+        uses: actions/upload-artifact@v4
+        with:
+          name: HICP_Voyager_deploy
+          path: |
+            global.R
+            server.R
+            ui.R
+            R/contribution_core.R
+            R/contribution_fixed_base.R
+            www/app_logo.png
+            www/app_logo_favicon.png
+          if-no-files-found: error
+          retention-days: 7
