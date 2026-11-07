@@ -14,9 +14,9 @@ This direct calculation is separate from the Ribe contributions on the M/M-1 and
 
 ## Full-year reference periods
 
-A full-year reference uses all twelve months; an incomplete year is not offered. Voyager first calculates the monthly decomposition from a common complete anchor month. Let:
+A full-year reference uses all twelve months; an incomplete year is not offered. Voyager calculates the monthly decomposition from January of the selected reference year. Let:
 
-- `R[t]` be the published parent index rebased to that anchor, with `R[anchor] = 100`;
+- `R[t]` be the published parent index rebased to January, with `R[January] = 100`;
 - `C[i,t]` be component `i`'s contribution from the same anchor;
 - `A` be the mean of `R[t]` over the twelve months in reference year `Y`; and
 - `mean_Y(C[i])` be component `i`'s mean contribution in that year.
@@ -34,7 +34,9 @@ Consequently, `mean_Y(R_year) = 100` and `mean_Y(C_year[i]) = 0`. If the anchor 
 sum_i C_year[i,t] = R_year[t] - 100.
 ```
 
-The same transformation also scales any observed aggregation residual instead of hiding it. Before offering a full year, Voyager verifies the annual weights and December chain links from each possible anchor through that year. It starts at the earliest anchor in the latest uninterrupted, computable chain. The transformed series can therefore include targets before the reference year when the chain supports them; history before a broken annual link is omitted and reported in the contribution-status message and CSV. This avoids calculating a long history that cannot reach the selected reference year.
+The same transformation also scales any observed aggregation residual instead of hiding it. Before offering a full year, Voyager verifies all twelve reference-year months, the reference-year weights, the preceding December indices, and January as the calculation anchor. Missing data from older years do not affect reference-year validity. Missing data in the reference year or its required preceding December do.
+
+The returned contribution series starts at the selected reference period: the selected month for a monthly reference and January for a full-year reference. Older Eurostat observations may still supply required technical inputs, such as the preceding December indices, but they are never returned as contribution results. A monthly reference therefore starts with zero contributions and zero published change. For a full-year reference, the annual average—not necessarily January—corresponds to index 100 and change zero.
 
 This change-of-reference transformation is a Voyager derivation used to support a monthly display relative to an annual average. It should not be confused with a formula quoted directly from Schwind and Weinand.
 
@@ -72,7 +74,7 @@ The CSV retains the methodologically relevant contribution and diagnostic fields
 - the requested-period contribution and the original anchor contribution;
 - published rebased index and published cumulative change;
 - complete and partial contribution sums;
-- residual, missing-component, completeness, and history-limit fields.
+- residual, missing-component, and completeness fields.
 
 Hover labels intentionally omit these diagnostics. Component hover contains only month, ECOICOP label, and signed contribution. Published-line hover contains only month, the published rebased index, and its signed cumulative change.
 

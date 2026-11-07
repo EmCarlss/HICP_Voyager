@@ -1003,7 +1003,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                                         tags$strong("Compare indices"),
                                                                         " supports country and product comparisons, HICP/HICP-CT and the existing rebasing and adjustment options. ",
                                                                         tags$strong("Contributions since reference period"),
-                                                                        " supports ordinary HICP for one country, one parent ECOICOP aggregate and either a monthly or complete full-year reference period."
+                                                                        " supports ordinary HICP for one country, one parent ECOICOP aggregate and either a monthly or complete full-year reference period. Results begin at the selected month or, for a full year, in January of that year."
                                                                 )
                                                         ),
                                                         tags$tr(
@@ -1234,7 +1234,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
 
                                                 tags$h3("Contributions since a reference period"),
                                                 tags$p(
-                                                        "For a monthly reference, the method decomposes the selected HICP parent aggregate's percentage price change from the selected base month to each subsequent month. ",
+                                                        "For a monthly reference, the method decomposes the selected HICP parent aggregate's percentage price change from the selected base month to each subsequent month. The returned series begins in that month, with zero component contributions and zero published change. ",
                                                         "The components are the complete set of direct child aggregates in the ECOICOP hierarchy, and each contribution is expressed in percentage points of the parent aggregate's change."
                                                 ),
                                                 tags$p(
@@ -1257,7 +1257,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                 ),
                                                 tags$h4("Full-year references"),
                                                 tags$p(
-                                                        "For a full-year reference, the app first calculates monthly contributions from a common complete anchor month. Let R[t] be the parent index rebased to that anchor, C[i,t] the corresponding component contribution, and A the mean of R over all twelve months in the selected year. The displayed transformation is:"
+                                                        "For a full-year reference, the app calculates monthly contributions from January of the selected year. Let R[t] be the parent index rebased to January, C[i,t] the corresponding component contribution, and A the mean of R over all twelve months in the selected year. The displayed transformation is:"
                                                 ),
                                                 tags$div(
                                                         "$$",
@@ -1265,7 +1265,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                         "$$"
                                                 ),
                                                 tags$p(
-                                                        "This derived change-of-reference transformation gives the published parent index an annual mean of 100 and each component contribution an annual mean of zero. It preserves an additive decomposition when the anchor decomposition is additive. A year is offered only when all twelve months and a complete annual-weight/December-link chain are available. The anchor starts after the latest broken link, and any resulting history limit is reported explicitly."
+                                                        "This derived change-of-reference transformation gives the published parent index an annual mean of 100 and each component contribution an annual mean of zero. It preserves an additive decomposition when the January-anchor decomposition is additive. The result begins in January of the reference year. A year is offered only when all twelve months, the reference-year weights, and the preceding December indices are complete; older missing data do not invalidate it. The annual average, rather than January itself, represents index 100 and change zero. Older Eurostat observations may still be used as technical inputs without being returned as contribution results."
                                                 ),
                                                 tags$h4("Cumulative contributions shown in the chart"),
                                                 tags$p(
