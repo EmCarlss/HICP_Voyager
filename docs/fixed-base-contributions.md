@@ -38,34 +38,25 @@ The same transformation also scales any observed aggregation residual instead of
 
 This change-of-reference transformation is a Voyager derivation used to support a monthly display relative to an annual average. It should not be confused with a formula quoted directly from Schwind and Weinand.
 
-## Allocated index levels
+## Cumulative-change chart
 
-Schwind–Weinand contributions decompose a price change; they do not allocate an index level. The combined chart therefore uses a separate presentation measure. For component `i`,
-
-```text
-L[i,t] = 100 * s[i] + C[i,t],
-```
-
-where `C[i,t]` is the contribution for the selected reference-period type and `s[i]` is a normalized level share. The shares are based on price-updated component weights:
-
-- for a monthly reference, the selected month's price-updated weights are normalized to sum to one;
-- for a full-year reference, the twelve monthly price-updated weights are averaged component by component and then normalized to sum to one.
-
-This normalization is used only to distribute the baseline level 100. It does not modify published weights or change contributions. With complete data,
+The combined chart displays `C[i,t]` directly as cumulative percentage-point contributions to the selected parent's price change. The reference period's rebased parent index is 100, while the chart's reference level is zero because it displays the change from 100:
 
 ```text
-sum_i L[i,t] = 100 + sum_i C[i,t].
+PublishedChange[t] = PublishedIndex[t] - 100.
 ```
 
-The stacked components therefore form the reconstructed index level, while the dark line is the published rebased parent index. Their difference is the aggregation residual. Residuals are never allocated back to components.
+Positive component contributions are stacked upward from zero and negative contributions downward from zero. The dark line is the published parent's cumulative change, not the component sum. With complete data,
 
-The component hover reports `C[i,t]`—the contribution to price change in percentage points—not the allocated level `L[i,t]` used as bar height.
+```text
+PublishedChange[t] = sum_i C[i,t] + Residual[t].
+```
 
-## Negative levels and incomplete observations
+Residuals are reported and never distributed across components. When both positive and negative contributions occur, the published line generally does not lie at the top of the positive stack: for example, `+80` and `-10` sum algebraically to `+70`, so the positive stack reaches `+80`, the negative stack reaches `-10`, and the line lies at `+70` when the residual is zero.
 
-Plotly's relative stacking puts positive and negative bars on opposite sides of zero, so its visible top is not the algebraic sum when an allocated component level is negative. Voyager checks the allocated levels before drawing the chart. If any complete observation has a negative allocated level, it shows the components as non-stacked lines and displays a warning rather than claiming that a misleading stack equals the index.
+## Incomplete observations
 
-If a required component index, annual weight, or December link is unavailable, that contribution is `NA`. The complete contribution sum, residual, and all plotted component levels for that month are also omitted. Available component values remain in the internal result and CSV as a labelled partial sum, but they are not drawn as an apparently complete reconstruction.
+If a required component index, annual weight, or December link is unavailable, that contribution remains `NA`. The complete contribution sum and residual are also omitted. All component bars for that month are suppressed so the chart cannot suggest a complete decomposition, while the published parent change remains visible when its observation is available. Available component values remain in the internal result and CSV as a labelled partial sum.
 
 ## Data retrieval and plot updates
 
@@ -75,16 +66,15 @@ If a required component index, annual weight, or December link is unavailable, t
 
 ## Diagnostics and export
 
-The CSV retains both contribution and presentation fields, including:
+The CSV retains the methodologically relevant contribution and diagnostic fields, including:
 
 - the selected reference type and period plus the common anchor;
 - the requested-period contribution and the original anchor contribution;
-- normalized level share, baseline allocation, and allocated component level;
-- published and reconstructed rebased indices;
+- published rebased index and published cumulative change;
 - complete and partial contribution sums;
-- residual, missing-component, completeness, and negative-level flags.
+- residual, missing-component, completeness, and history-limit fields.
 
-Hover labels intentionally omit these diagnostics. Component hover contains only month, ECOICOP label, and signed contribution; published-index hover contains only month and the index value.
+Hover labels intentionally omit these diagnostics. Component hover contains only month, ECOICOP label, and signed contribution. Published-line hover contains only month, the published rebased index, and its signed cumulative change.
 
 ## Hierarchy requirements
 
@@ -92,6 +82,6 @@ Components must be exactly the direct children recorded for the selected parent 
 
 ## Reference
 
-Patrick Schwind and Sebastian Weinand (2026), “Contributions to euro area inflation over arbitrary time periods”, 19th Meeting of the Ottawa Group on Price Indices. The paper develops contributions to price changes for annually chained Laspeyres-type indices over arbitrary periods; Voyager's level allocation and monthly-to-full-year display transformation are identified above as derived presentation choices.
+Patrick Schwind and Sebastian Weinand (2026), “Contributions to euro area inflation over arbitrary time periods”, 19th Meeting of the Ottawa Group on Price Indices. The paper develops contributions to price changes for annually chained Laspeyres-type indices over arbitrary periods; Voyager's monthly-to-full-year display transformation is identified above as a derived change-of-reference transformation.
 
 https://stats.unece.org/ottawagroup/download/Meeting_19_session6_paper_Schwind_Weinand_2026_Contributions_to_euro_area_inflation_over_arbitrary_time_periods.pdf

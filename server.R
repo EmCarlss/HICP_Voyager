@@ -1286,18 +1286,8 @@ function(input, output, session) {
                                                 nrow(missing_rows),
                                                 " month(s). Missing required observations involve: ",
                                                 paste(unique(missing_rows$missing_components), collapse = "; "),
-                                                ". The complete sum, allocated stack and residual are shown as gaps."
+                                                ". Component bars, the complete sum and the residual are shown as gaps; the published total remains visible."
                                         )
-                                )
-                        }
-
-                        allocation_rows <- data %>%
-                                filter(!level_allocation_complete) %>%
-                                distinct(time)
-                        if (nrow(allocation_rows) > nrow(missing_rows)) {
-                                warnings <- c(
-                                        warnings,
-                                        "Some component-level allocations are unavailable; those months are not drawn as complete stacks."
                                 )
                         }
 
@@ -1316,9 +1306,6 @@ function(input, output, session) {
                                         )
                                 )
                         }
-
-                        stacking <- fixed_base_stacking_status(data)
-                        if (!stacking$supported) warnings <- c(warnings, stacking$message)
                 }
 
                 if (length(warnings) == 0) return(NULL)
@@ -1340,7 +1327,7 @@ function(input, output, session) {
                         pull(code_label)
                 if (length(parent_label) == 0) parent_label <- parent_code
                 plot_title <- paste0(
-                        "Index-level contributions to ", parent_label,
+                        "Cumulative contributions to ", parent_label,
                         " relative to ", state$reference_label,
                         " — ", country_code
                 ) %>%
@@ -1355,11 +1342,19 @@ function(input, output, session) {
                 )
 
                 parent_data <- data %>%
-                        distinct(geo, time, parent_rebased) %>%
-                        arrange(time)
+                        distinct(geo, time, parent_rebased, total_change_pct) %>%
+                        arrange(time) %>%
+                        mutate(
+                                published_hover = paste0(
+                                        "<b>", format(time, "%Y-%m"), "</b>",
+                                        "<br><br>Published rebased index: ", sprintf("%.3f", parent_rebased),
+                                        "<br><br>Cumulative change: ", sprintf("%+.3f", total_change_pct), " pp"
+                                )
+                        )
                 component_data <- data %>%
                         arrange(code_label_wrapped, time) %>%
                         mutate(
+                                contribution_pp = ifelse(complete, contribution_pp, NA_real_),
                                 fixed_base_hover = paste0(
                                         "<b>", format(time, "%Y-%m"), "</b>",
                                         "<br><br>", code_label,
@@ -1367,72 +1362,37 @@ function(input, output, session) {
                                 )
                         )
                 component_styles <- component_style_map(component_data$code_label_wrapped)
-                stacking <- fixed_base_stacking_status(component_data)
-
-                if (stacking$supported) {
-                        plotly_plot <- add_styled_bar_traces(
-                                plot_ly(),
-                                component_data,
-                                x_col = "time",
-                                y_col = "allocated_index_level_plot",
-                                style_map = component_styles,
-                                showlegend = TRUE,
-                                hover_col = "fixed_base_hover",
-                                hovertemplate = "%{text}<extra></extra>",
-                                textposition = "none"
-                        )
-                } else {
-                        plotly_plot <- plot_ly()
-                        for (label_value in component_styles$label) {
-                                trace_data <- component_data %>%
-                                        filter(code_label_wrapped == label_value) %>%
-                                        arrange(time)
-                                style_row <- component_styles[
-                                        match(label_value, component_styles$label),
-                                        ,
-                                        drop = FALSE
-                                ]
-                                plotly_plot <- plotly_plot %>%
-                                        add_trace(
-                                                data = trace_data,
-                                                x = ~time,
-                                                y = ~allocated_index_level_plot,
-                                                type = "scatter",
-                                                mode = "lines",
-                                                name = label_value,
-                                                legendgroup = label_value,
-                                                legendrank = 100 + match(label_value, component_styles$label),
-                                                line = list(color = style_row$color, width = 1.8),
-                                                text = ~fixed_base_hover,
-                                                hovertemplate = "%{text}<extra></extra>",
-                                                connectgaps = FALSE,
-                                                showlegend = TRUE,
-                                                inherit = FALSE
-                                        )
-                        }
-                }
+                plotly_plot <- add_styled_bar_traces(
+                        plot_ly(),
+                        component_data,
+                        x_col = "time",
+                        y_col = "contribution_pp",
+                        style_map = component_styles,
+                        showlegend = TRUE,
+                        hover_col = "fixed_base_hover",
+                        hovertemplate = "%{text}<extra></extra>",
+                        textposition = "none"
+                )
 
                 plotly_plot %>%
                         add_trace(
                                 data = parent_data,
                                 x = ~time,
-                                y = ~parent_rebased,
+                                y = ~total_change_pct,
                                 type = "scatter",
                                 mode = "lines",
-                                name = "Published parent index",
+                                name = "Published total change",
                                 legendrank = 1,
                                 line = list(color = "#20322f", width = 3.2, dash = "solid"),
-                                hovertemplate = paste0(
-                                        "<b>%{x|%Y-%m}</b><br><br>",
-                                        "Published HICP index: %{y:.3f}<extra></extra>"
-                                ),
+                                text = ~published_hover,
+                                hovertemplate = "%{text}<extra></extra>",
                                 connectgaps = FALSE,
                                 showlegend = TRUE,
                                 inherit = FALSE
                         ) %>%
                         layout(
                                 title = list(text = plot_title, x = 0.02),
-                                barmode = "stack",
+                                barmode = "relative",
                                 bargap = 0.08,
                                 xaxis = list(
                                         title = "",
@@ -1450,12 +1410,15 @@ function(input, output, session) {
                                         )
                                 ),
                                 yaxis = list(
-                                        title = "Rebased index (reference period = 100)",
+                                        title = "Cumulative change since reference period (pp)",
+                                        zeroline = TRUE,
+                                        zerolinecolor = "#6f7f7b",
+                                        zerolinewidth = 1.2,
                                         automargin = TRUE
                                 ),
                                 hovermode = "closest",
                                 legend = contribution_legend_layout("normal"),
-                                margin = contribution_plot_margin(right = 260, top = 78, bottom = 100),
+                                margin = contribution_plot_margin(right = 260, top = 78, bottom = 115),
                                 height = 660,
                                 paper_bgcolor = "white",
                                 plot_bgcolor = "white"
@@ -3067,15 +3030,8 @@ function(input, output, session) {
                                         time,
                                         contribution_pp,
                                         anchor_contribution_pp,
-                                        level_share,
-                                        base_level_allocation,
-                                        allocated_index_level,
-                                        allocated_level_sum,
-                                        level_allocation_complete,
-                                        negative_allocated_level,
                                         parent_rebased,
                                         anchor_parent_rebased,
-                                        reconstructed_index,
                                         total_change_pct,
                                         partial_contribution_sum_pp,
                                         contribution_sum_pp,
