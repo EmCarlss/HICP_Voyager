@@ -1239,7 +1239,7 @@ function(input, output, session) {
                         warnings <- c(
                                 warnings,
                                 if (identical(input$fixed_base_period_type, "Full year")) {
-                                        "No full year has all twelve required monthly indices, December links and annual weights."
+                                        "No full year has all twelve required monthly indices, the preceding December indices and reference-year annual weights."
                                 } else {
                                         "No monthly reference period has all required indices, December links and annual weights."
                                 }
@@ -1268,13 +1268,6 @@ function(input, output, session) {
 
                 if (!is.null(state)) {
                         data <- state$data
-                        history_reasons <- unique(data$history_limit_reason[
-                                data$history_limited & nzchar(data$history_limit_reason)
-                        ])
-                        if (length(history_reasons) > 0) {
-                                warnings <- c(warnings, history_reasons)
-                        }
-
                         missing_rows <- data %>%
                                 filter(!complete) %>%
                                 distinct(time, missing_components)
@@ -3023,9 +3016,6 @@ function(input, output, session) {
                                         reference_type,
                                         reference_period,
                                         anchor_period,
-                                        history_start_period,
-                                        history_limited,
-                                        history_limit_reason,
                                         base_period,
                                         time,
                                         contribution_pp,

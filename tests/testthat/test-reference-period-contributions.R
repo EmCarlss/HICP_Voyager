@@ -1,4 +1,4 @@
-test_that("monthly references expose additive cumulative changes without level allocation", {
+test_that("monthly references start at the selected month with zero change", {
         data <- make_synthetic_hicp()
         result <- calculate_reference_period_contributions(
                 data$index,
@@ -6,12 +6,18 @@ test_that("monthly references expose additive cumulative changes without level a
                 parent_code = "P",
                 component_codes = c("A", "B"),
                 reference_type = "month",
-                reference_period = "2021-01-01",
+                reference_period = "2021-09-01",
                 residual_tolerance = 1e-10
         )
         monthly <- result[!duplicated(result$time), ]
         period_data <- split(result, result$time)
+        first_month <- result[result$time == min(result$time), ]
 
+        expect_equal(min(result$time), as.Date("2021-09-01"))
+        expect_true(all(result$time >= as.Date("2021-09-01")))
+        expect_equal(unique(result$anchor_period), as.Date("2021-09-01"))
+        expect_equal(first_month$contribution_pp, c(0, 0), tolerance = 1e-12)
+        expect_equal(unique(first_month$total_change_pct), 0, tolerance = 1e-12)
         expect_equal(
                 monthly$parent_rebased - 100,
                 monthly$total_change_pct,
@@ -47,6 +53,9 @@ test_that("full-year transformation has the required annual means", {
         parent_reference <- reference[!duplicated(reference$time), ]
         monthly <- result[!duplicated(result$time), ]
 
+        expect_equal(min(result$time), as.Date("2022-01-01"))
+        expect_true(all(result$time >= as.Date("2022-01-01")))
+        expect_equal(unique(result$anchor_period), as.Date("2022-01-01"))
         expect_equal(mean(parent_reference$parent_rebased), 100, tolerance = 1e-10)
         expect_equal(
                 as.numeric(tapply(reference$contribution_pp, reference$component_code, mean)),
@@ -60,7 +69,7 @@ test_that("full-year transformation has the required annual means", {
         )
 })
 
-test_that("full-year contributions remain additive before and after the reference year", {
+test_that("full-year contributions remain additive through later year boundaries", {
         data <- make_synthetic_hicp()
         result <- calculate_reference_period_contributions(
                 data$index,
@@ -72,8 +81,9 @@ test_that("full-year contributions remain additive before and after the referenc
                 residual_tolerance = 1e-10
         )
         monthly <- result[!duplicated(result$time), ]
-        selected <- monthly[monthly$time %in% as.Date(c("2021-06-01", "2023-06-01")), ]
+        selected <- monthly[monthly$time %in% as.Date(c("2022-06-01", "2023-06-01")), ]
 
+        expect_equal(min(result$time), as.Date("2022-01-01"))
         expect_equal(
                 selected$total_change_pct,
                 selected$contribution_sum_pp,
@@ -82,7 +92,7 @@ test_that("full-year contributions remain additive before and after the referenc
         expect_true(all(abs(selected$residual_pp) < 1e-10))
 })
 
-test_that("full-year anchors keep the earliest uninterrupted computable history", {
+test_that("full-year references always use January of the selected year", {
         data <- make_synthetic_hicp()
         anchor <- select_fixed_base_year_anchor(
                 data$index,
@@ -93,14 +103,13 @@ test_that("full-year anchors keep the earliest uninterrupted computable history"
         )
 
         expect_true(anchor$valid)
-        expect_equal(anchor$anchor_period, as.Date("2021-01-01"))
-        expect_false(anchor$history_limited)
+        expect_equal(anchor$anchor_period, as.Date("2024-01-01"))
 })
 
-test_that("a missing intermediate annual weight moves the full-year anchor forward", {
-        data <- make_synthetic_hicp()
+test_that("missing older weights do not invalidate a later full-year reference", {
+        data <- make_long_reference_hicp()
         data$weights$values[
-                data$weights$coicop18 == "B" & format(data$weights$time, "%Y") == "2022"
+                data$weights$coicop18 == "B" & format(data$weights$time, "%Y") == "2010"
         ] <- NA_real_
 
         anchor <- select_fixed_base_year_anchor(
@@ -108,7 +117,7 @@ test_that("a missing intermediate annual weight moves the full-year anchor forwa
                 data$weights,
                 parent_code = "P",
                 component_codes = c("A", "B"),
-                reference_year = 2024
+                reference_year = 2015
         )
         available_years <- valid_fixed_base_years(
                 data$index,
@@ -122,24 +131,34 @@ test_that("a missing intermediate annual weight moves the full-year anchor forwa
                 parent_code = "P",
                 component_codes = c("A", "B"),
                 reference_type = "year",
-                reference_period = 2024,
+                reference_period = 2015,
                 residual_tolerance = 1e-10
         )
-        reference <- result[format(result$time, "%Y") == "2024", ]
+        reference <- result[format(result$time, "%Y") == "2015", ]
         parent_reference <- reference[!duplicated(reference$time), ]
 
         expect_true(anchor$valid)
-        expect_equal(anchor$anchor_period, as.Date("2023-01-01"))
-        expect_true(anchor$history_limited)
-        expect_match(anchor$history_limit_reason, "incomplete through 2022")
-        expect_true(2024 %in% available_years)
-        expect_equal(unique(result$anchor_period), as.Date("2023-01-01"))
-        expect_equal(min(result$time), as.Date("2023-01-01"))
-        expect_true(any(format(result$time, "%Y") == "2023"))
+        expect_equal(anchor$anchor_period, as.Date("2015-01-01"))
+        expect_true(2015 %in% available_years)
+        expect_equal(unique(result$anchor_period), as.Date("2015-01-01"))
+        expect_equal(min(result$time), as.Date("2015-01-01"))
+        expect_true(all(result$time >= as.Date("2015-01-01")))
         expect_equal(mean(parent_reference$parent_rebased), 100, tolerance = 1e-10)
+        expect_equal(
+                as.numeric(tapply(reference$contribution_pp, reference$component_code, mean)),
+                c(0, 0),
+                tolerance = 1e-10
+        )
+        monthly <- result[!duplicated(result$time), ]
+        expect_equal(
+                monthly$contribution_sum_pp + monthly$residual_pp,
+                monthly$total_change_pct,
+                tolerance = 1e-10
+        )
+        expect_true(any(format(result$time, "%Y") == "2016"))
 })
 
-test_that("a missing intermediate December link moves the full-year anchor forward", {
+test_that("a missing older December link does not affect the January anchor", {
         data <- make_synthetic_hicp()
         data$index$values[
                 data$index$coicop18 == "A" & data$index$time == as.Date("2022-12-01")
@@ -155,8 +174,6 @@ test_that("a missing intermediate December link moves the full-year anchor forwa
 
         expect_true(anchor$valid)
         expect_equal(anchor$anchor_period, as.Date("2024-01-01"))
-        expect_true(anchor$history_limited)
-        expect_match(anchor$history_limit_reason, "incomplete through 2023")
 })
 
 test_that("full-year references require twelve complete months", {
@@ -182,6 +199,46 @@ test_that("full-year references require twelve complete months", {
                 ),
                 "incomplete"
         )
+})
+
+test_that("full-year references require their own weights and preceding December", {
+        missing_weight <- make_long_reference_hicp()
+        missing_weight$weights$values[
+                missing_weight$weights$coicop18 == "B" &
+                        format(missing_weight$weights$time, "%Y") == "2015"
+        ] <- NA_real_
+        missing_december <- make_long_reference_hicp()
+        missing_december$index$values[
+                missing_december$index$coicop18 == "A" &
+                        missing_december$index$time == as.Date("2014-12-01")
+        ] <- NA_real_
+        missing_january <- make_long_reference_hicp()
+        missing_january$index$values[
+                missing_january$index$coicop18 == "A" &
+                        missing_january$index$time == as.Date("2015-01-01")
+        ] <- NA_real_
+
+        expect_false(2015 %in% valid_fixed_base_years(
+                missing_weight$index,
+                missing_weight$weights,
+                parent_code = "P",
+                component_codes = c("A", "B")
+        ))
+        expect_false(2015 %in% valid_fixed_base_years(
+                missing_december$index,
+                missing_december$weights,
+                parent_code = "P",
+                component_codes = c("A", "B")
+        ))
+        january_anchor <- select_fixed_base_year_anchor(
+                missing_january$index,
+                missing_january$weights,
+                parent_code = "P",
+                component_codes = c("A", "B"),
+                reference_year = 2015
+        )
+        expect_false(january_anchor$valid)
+        expect_true(is.na(january_anchor$anchor_period))
 })
 
 test_that("incomplete target months keep missing contributions and diagnostics explicit", {
@@ -256,6 +313,8 @@ test_that("the fixed-base Plotly chart uses relative contribution bars and one p
         expect_match(plot_text, "rangeslider = list", fixed = TRUE)
         expect_match(plot_text, "zeroline = TRUE", fixed = TRUE)
         expect_match(plot_text, "ifelse(complete, contribution_pp, NA_real_)", fixed = TRUE)
+        expect_match(plot_text, "parent_data <- data", fixed = TRUE)
+        expect_match(plot_text, "component_data <- data", fixed = TRUE)
         expect_false(grepl("allocated_index_level", plot_text, fixed = TRUE))
         expect_false(grepl("fixed_base_stacking_status", plot_text, fixed = TRUE))
 })
@@ -271,16 +330,17 @@ test_that("the fixed-base CSV keeps contribution diagnostics and drops level all
         for (field in c(
                 "geo", "time", "parent_code", "component_code", "reference_type",
                 "reference_period", "anchor_period", "contribution_pp", "parent_rebased",
-                "total_change_pct", "contribution_sum_pp", "residual_pp", "complete",
-                "history_limited", "history_limit_reason"
+                "total_change_pct", "contribution_sum_pp", "residual_pp", "complete"
         )) {
                 expect_match(export_text, field, fixed = TRUE)
         }
+        expect_match(export_text, "data <- fixed_base_data()", fixed = TRUE)
         for (field in c(
                 "level_share", "base_level_allocation", "allocated_index_level",
                 "allocated_index_level_plot", "allocated_level_sum",
                 "level_allocation_complete", "negative_allocated_level",
-                "reconstructed_index"
+                "reconstructed_index", "history_start_period", "history_limited",
+                "history_limit_reason"
         )) {
                 expect_false(grepl(field, export_text, fixed = TRUE))
         }
