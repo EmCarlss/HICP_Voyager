@@ -34,7 +34,7 @@ Consequently, `mean_Y(R_year) = 100` and `mean_Y(C_year[i]) = 0`. If the anchor 
 sum_i C_year[i,t] = R_year[t] - 100.
 ```
 
-The same transformation also scales any observed aggregation residual instead of hiding it. Because the common anchor precedes the reference year, the transformed series can include targets both before and after that year where the necessary data exist.
+The same transformation also scales any observed aggregation residual instead of hiding it. Before offering a full year, Voyager verifies the annual weights and December chain links from each possible anchor through that year. It starts at the earliest anchor in the latest uninterrupted, computable chain. The transformed series can therefore include targets before the reference year when the chain supports them; history before a broken annual link is omitted and reported in the contribution-status message and CSV. This avoids calculating a long history that cannot reach the selected reference year.
 
 This change-of-reference transformation is a Voyager derivation used to support a monthly display relative to an annual average. It should not be confused with a formula quoted directly from Schwind and Weinand.
 

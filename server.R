@@ -1268,6 +1268,13 @@ function(input, output, session) {
 
                 if (!is.null(state)) {
                         data <- state$data
+                        history_reasons <- unique(data$history_limit_reason[
+                                data$history_limited & nzchar(data$history_limit_reason)
+                        ])
+                        if (length(history_reasons) > 0) {
+                                warnings <- c(warnings, history_reasons)
+                        }
+
                         missing_rows <- data %>%
                                 filter(!complete) %>%
                                 distinct(time, missing_components)
@@ -3053,6 +3060,9 @@ function(input, output, session) {
                                         reference_type,
                                         reference_period,
                                         anchor_period,
+                                        history_start_period,
+                                        history_limited,
+                                        history_limit_reason,
                                         base_period,
                                         time,
                                         contribution_pp,

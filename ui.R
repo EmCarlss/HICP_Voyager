@@ -1266,7 +1266,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                         "$$"
                                                 ),
                                                 tags$p(
-                                                        "This derived change-of-reference transformation gives the published parent index an annual mean of 100 and each component contribution an annual mean of zero. It preserves an additive decomposition when the anchor decomposition is additive. A year is offered only when all twelve months are complete."
+                                                        "This derived change-of-reference transformation gives the published parent index an annual mean of 100 and each component contribution an annual mean of zero. It preserves an additive decomposition when the anchor decomposition is additive. A year is offered only when all twelve months and a complete annual-weight/December-link chain are available. The anchor starts after the latest broken link, and any resulting history limit is reported explicitly."
                                                 ),
                                                 tags$h4("Allocated index levels used in the chart"),
                                                 tags$p(

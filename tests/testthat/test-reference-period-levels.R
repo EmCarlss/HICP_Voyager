@@ -97,6 +97,69 @@ test_that("full-year allocations are additive before and after the reference yea
         expect_true(all(abs(selected$residual_pp) < 1e-10))
 })
 
+test_that("full-year anchors keep the earliest uninterrupted computable history", {
+        data <- make_synthetic_hicp()
+        anchor <- select_fixed_base_year_anchor(
+                data$index,
+                data$weights,
+                parent_code = "P",
+                component_codes = c("A", "B"),
+                reference_year = 2024
+        )
+
+        expect_true(anchor$valid)
+        expect_equal(anchor$anchor_period, as.Date("2021-01-01"))
+        expect_false(anchor$history_limited)
+})
+
+test_that("a missing intermediate annual weight moves the full-year anchor forward", {
+        data <- make_synthetic_hicp()
+        data$weights$values[
+                data$weights$coicop18 == "B" & format(data$weights$time, "%Y") == "2022"
+        ] <- NA_real_
+
+        anchor <- select_fixed_base_year_anchor(
+                data$index,
+                data$weights,
+                parent_code = "P",
+                component_codes = c("A", "B"),
+                reference_year = 2024
+        )
+        available_years <- valid_fixed_base_years(
+                data$index,
+                data$weights,
+                parent_code = "P",
+                component_codes = c("A", "B")
+        )
+        result <- calculate_reference_period_contributions(
+                data$index,
+                data$weights,
+                parent_code = "P",
+                component_codes = c("A", "B"),
+                reference_type = "year",
+                reference_period = 2024,
+                residual_tolerance = 1e-10
+        )
+        reference <- result[format(result$time, "%Y") == "2024", ]
+        parent_reference <- reference[!duplicated(reference$time), ]
+        monthly <- result[!duplicated(result$time), ]
+
+        expect_true(anchor$valid)
+        expect_equal(anchor$anchor_period, as.Date("2023-01-01"))
+        expect_true(anchor$history_limited)
+        expect_match(anchor$history_limit_reason, "incomplete through 2022")
+        expect_true(2024 %in% available_years)
+        expect_equal(unique(result$anchor_period), as.Date("2023-01-01"))
+        expect_equal(min(result$time), as.Date("2023-01-01"))
+        expect_true(any(format(result$time, "%Y") == "2023"))
+        expect_equal(mean(parent_reference$parent_rebased), 100, tolerance = 1e-10)
+        expect_equal(
+                monthly$allocated_level_sum,
+                100 + monthly$contribution_sum_pp,
+                tolerance = 1e-10
+        )
+})
+
 test_that("full-year references require twelve complete months", {
         data <- make_synthetic_hicp()
         data$index$values[
