@@ -2,6 +2,9 @@ library(eurostat)
 library(dplyr)
 library(stringr)
 
+source("R/contribution_core.R", local = FALSE)
+source("R/contribution_fixed_base.R", local = FALSE)
+
 hikp_coicop <- get_eurostat("prc_hicp_minr", filters = list(geo = "DE", unit = "I25"))
 hicp_coicop2 <- label_eurostat(
         hikp_coicop,
@@ -49,6 +52,10 @@ coicop_set_hierarchy <- coicop_set_hierarchy %>%
         )
 
 label_set <- select(coicop_set_hierarchy, coicop18_code, code_label)
+
+fixed_base_parent_set <- coicop_set_hierarchy %>%
+        filter(coicop18_code %in% unique(na.omit(parent_code))) %>%
+        arrange(coicop18_code)
 
 # ------------------------------------------------------------
 # Special aggregates hierarchy

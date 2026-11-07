@@ -426,6 +426,20 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                         class = "control-card",
                                                         tags$h3("Index settings"),
                                                         control_group(
+                                                                "Display mode",
+                                                                radioButtons(
+                                                                        "index_view_mode",
+                                                                        NULL,
+                                                                        choices = c(
+                                                                                "Compare indices" = "compare",
+                                                                                "Contributions since reference period" = "fixed_base"
+                                                                        ),
+                                                                        selected = "compare"
+                                                                )
+                                                        ),
+                                                        conditionalPanel(
+                                                                condition = "input.index_view_mode == 'compare'",
+                                                        control_group(
                                                                 "Countries",
                                                                 country_group_buttons("index"),
                                                                 selectInput(
@@ -507,9 +521,65 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                                 note = "The selected reference period is set to 100 for all displayed series."
                                                         ),
                                                         download_panel("output.plot", "downloadData")
+                                                        ),
+                                                        conditionalPanel(
+                                                                condition = "input.index_view_mode == 'fixed_base'",
+                                                                control_group(
+                                                                        "Country",
+                                                                        selectInput(
+                                                                                "fixed_base_country",
+                                                                                "Select one country",
+                                                                                choices = setNames(eurostat_countries$code, eurostat_countries$name),
+                                                                                multiple = FALSE
+                                                                        )
+                                                                ),
+                                                                control_group(
+                                                                        "Parent aggregate",
+                                                                        selectInput(
+                                                                                "fixed_base_parent",
+                                                                                "Select an ECOICOP aggregate",
+                                                                                choices = setNames(
+                                                                                        fixed_base_parent_set$coicop18_code,
+                                                                                        fixed_base_parent_set$code_label
+                                                                                ),
+                                                                                selected = "CP011",
+                                                                                multiple = FALSE
+                                                                        ),
+                                                                        note = "Contributions use the complete set of direct ECOICOP children."
+                                                                ),
+                                                                actionButton(
+                                                                        "fixed_base_retrieve",
+                                                                        "Retrieve data",
+                                                                        class = "primary-action-btn"
+                                                                ),
+                                                                control_group(
+                                                                        "Reference period",
+                                                                        selectInput(
+                                                                                "fixed_base_period",
+                                                                                "Select monthly reference period",
+                                                                                choices = ""
+                                                                        ),
+                                                                        note = paste(
+                                                                                "Monthly reference periods use the exact arbitrary-period method.",
+                                                                                "Full-year bases remain available in Compare indices only."
+                                                                        )
+                                                                ),
+                                                                download_panel("output.plot_fixed_base", "downloadData_fixed_base")
+                                                        )
                                                 )
                                         ),
-                                        column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot", height = "620px")))
+                                        column(
+                                                width = 9,
+                                                conditionalPanel(
+                                                        condition = "input.index_view_mode == 'compare'",
+                                                        tags$div(class = "plot-card", plotlyOutput("plot", height = "620px"))
+                                                ),
+                                                conditionalPanel(
+                                                        condition = "input.index_view_mode == 'fixed_base'",
+                                                        uiOutput("fixed_base_warning"),
+                                                        tags$div(class = "plot-card", plotlyOutput("plot_fixed_base", height = "760px"))
+                                                )
+                                        )
                                 )
                         )
                 ),
