@@ -601,7 +601,9 @@ function(input, output, session) {
                 style_map,
                 showlegend = TRUE,
                 legend_col = "code_label_wrapped",
-                hover_col = NULL
+                hover_col = NULL,
+                hovertemplate = NULL,
+                textposition = NULL
         ) {
                 if (nrow(data) == 0 || nrow(style_map) == 0) return(plot)
 
@@ -645,6 +647,8 @@ function(input, output, session) {
                                         marker = marker_style,
                                         text = hover_text,
                                         hoverinfo = if (is.null(hover_text)) "all" else "text",
+                                        hovertemplate = hovertemplate,
+                                        textposition = textposition,
                                         inherit = FALSE
                                 )
                 }
@@ -1086,7 +1090,7 @@ function(input, output, session) {
         })
 
         # ------------------------------------------------------------
-        # Index tab: contributions since a fixed monthly reference period
+        # Index tab: contributions since a monthly or full-year reference period
         # ------------------------------------------------------------
 
         fixed_base_raw_data <- eventReactive(input$fixed_base_retrieve, {
@@ -1111,56 +1115,88 @@ function(input, output, session) {
                 list(
                         setup = setup,
                         partition = partition,
+                        selected_country = input$fixed_base_country,
                         selected_parent = input$fixed_base_parent,
                         data_I = raw_data$data_I,
                         data_W = raw_data$data_W
                 )
         })
 
-        observeEvent(fixed_base_raw_data(), {
+        fixed_base_reference_options <- reactive({
                 raw <- fixed_base_raw_data()
-                months <- valid_fixed_base_months(
-                        raw$data_I,
-                        raw$data_W,
-                        parent_code = raw$setup$coicops,
-                        component_codes = raw$partition$components
-                )
+                req(raw, input$fixed_base_period_type)
 
+                if (identical(input$fixed_base_period_type, "Full year")) {
+                        years <- valid_fixed_base_years(
+                                raw$data_I,
+                                raw$data_W,
+                                parent_code = raw$setup$coicops,
+                                component_codes = raw$partition$components
+                        )
+                        values <- as.character(years)
+                        labels <- values
+                } else {
+                        months <- valid_fixed_base_months(
+                                raw$data_I,
+                                raw$data_W,
+                                parent_code = raw$setup$coicops,
+                                component_codes = raw$partition$components
+                        )
+                        values <- format(months, "%Y-%m-%d")
+                        labels <- format(months, "%Y %B")
+                }
+
+                list(values = values, labels = labels)
+        })
+
+        observeEvent(
+                list(fixed_base_raw_data(), input$fixed_base_period_type),
+                {
+                        options <- fixed_base_reference_options()
+                        current <- isolate(input$fixed_base_period)
+                        selected <- if (!is.null(current) && current %in% options$values) {
+                                current
+                        } else if (length(options$values) == 0) {
+                                character(0)
+                        } else if (identical(input$fixed_base_period_type, "Month")) {
+                                options$values[max(1L, length(options$values) - 60L)]
+                        } else {
+                                tail(options$values, 1)
+                        }
+                        updateSelectInput(
+                                session,
+                                "fixed_base_period",
+                                choices = setNames(options$values, options$labels),
+                                selected = selected
+                        )
+                },
+                ignoreInit = TRUE
+        )
+
+        fixed_base_has_result <- reactiveVal(FALSE)
+
+        fixed_base_result <- eventReactive(input$fixed_base_update, {
+                raw <- fixed_base_raw_data()
+                req(raw, input$fixed_base_period_type, input$fixed_base_period)
                 validate(need(
-                        length(months) > 0,
-                        "No monthly reference period has all required indices, December links and annual weights."
+                        identical(raw$selected_country, input$fixed_base_country) &&
+                                identical(raw$selected_parent, input$fixed_base_parent),
+                        "Country or parent aggregate has changed. Retrieve data before updating the plot."
                 ))
 
-                labels <- format(months, "%Y %B")
-                default_index <- max(1L, length(months) - 60L)
-                updateSelectInput(
-                        session,
-                        "fixed_base_period",
-                        choices = setNames(labels, labels),
-                        selected = labels[default_index]
-                )
-        }, ignoreInit = TRUE)
-
-        fixed_base_data <- reactive({
-                raw <- fixed_base_raw_data()
-                req(raw, input$fixed_base_period)
-
-                base_period <- as.Date(
-                        paste0(input$fixed_base_period, " 01"),
-                        format = "%Y %B %d"
-                )
-                validate(need(!is.na(base_period), "Select a valid monthly reference period."))
-
-                result <- calculate_fixed_base_contributions(
+                reference_type <- if (identical(input$fixed_base_period_type, "Full year")) "year" else "month"
+                reference_value <- input$fixed_base_period
+                result <- calculate_reference_period_contributions(
                         index_data = raw$data_I,
                         weight_data = raw$data_W,
                         parent_code = raw$setup$coicops,
                         component_codes = raw$partition$components,
-                        base_period = base_period
+                        reference_type = reference_type,
+                        reference_period = reference_value
                 )
-                validate(need(nrow(result) > 0, "No contribution data are available from the selected reference period."))
+                validate(need(nrow(result) > 0, "No contribution data are available for the selected reference period."))
 
-                result %>%
+                result <- result %>%
                         left_join(
                                 label_set_ecoicop,
                                 by = c("component_code" = "coicop18_code")
@@ -1169,65 +1205,136 @@ function(input, output, session) {
                                 code_label = ifelse(is.na(code_label), component_code, code_label),
                                 code_label_wrapped = wrap_legend(code_label, width = 38)
                         )
+
+                output_value <- list(
+                        data = result,
+                        selected_country = raw$selected_country,
+                        selected_parent = raw$selected_parent,
+                        reference_type = reference_type,
+                        reference_value = reference_value,
+                        reference_label = if (reference_type == "year") {
+                                paste("full year", reference_value)
+                        } else {
+                                format(as.Date(reference_value), "%Y %B")
+                        }
+                )
+                fixed_base_has_result(TRUE)
+                output_value
+        }, ignoreInit = TRUE)
+
+        fixed_base_data <- reactive({
+                state <- if (fixed_base_has_result()) fixed_base_result() else NULL
+                req(state)
+                state$data
         })
 
         output$fixed_base_warning <- renderUI({
-                data <- fixed_base_data()
+                raw <- fixed_base_raw_data()
+                req(raw)
+                options <- fixed_base_reference_options()
+                state <- if (fixed_base_has_result()) fixed_base_result() else NULL
                 warnings <- character(0)
 
-                missing_rows <- data %>%
-                        filter(!complete) %>%
-                        distinct(time, missing_components)
-                if (nrow(missing_rows) > 0) {
+                if (length(options$values) == 0) {
                         warnings <- c(
                                 warnings,
-                                paste0(
-                                        "Contributions are incomplete for ",
-                                        nrow(missing_rows),
-                                        " month(s). Missing required observations involve: ",
-                                        paste(unique(missing_rows$missing_components), collapse = "; "),
-                                        ". Incomplete sums and residuals are reported as missing."
-                                )
+                                if (identical(input$fixed_base_period_type, "Full year")) {
+                                        "No full year has all twelve required monthly indices, December links and annual weights."
+                                } else {
+                                        "No monthly reference period has all required indices, December links and annual weights."
+                                }
                         )
                 }
 
-                residual_rows <- data %>%
-                        filter(significant_residual) %>%
-                        distinct(time, residual_pp)
-                if (nrow(residual_rows) > 0) {
+                if (!identical(raw$selected_country, input$fixed_base_country) ||
+                        !identical(raw$selected_parent, input$fixed_base_parent)) {
                         warnings <- c(
                                 warnings,
-                                paste0(
-                                        "The absolute aggregation residual exceeds 0.05 percentage points in ",
-                                        nrow(residual_rows),
-                                        " month(s); maximum ",
-                                        format(max(abs(residual_rows$residual_pp), na.rm = TRUE), digits = 3),
-                                        " pp. Published parent changes have not been forced onto the component sum."
-                                )
+                                "Country or parent aggregate has changed. Click Retrieve data before Update plot."
                         )
+                } else if (is.null(state)) {
+                        if (length(options$values) > 0) {
+                                warnings <- c(warnings, "Choose a reference period and click Update plot.")
+                        }
+                } else if (!identical(state$selected_country, raw$selected_country) ||
+                        !identical(state$selected_parent, raw$selected_parent) ||
+                        !identical(state$reference_type, if (identical(input$fixed_base_period_type, "Full year")) "year" else "month") ||
+                        !identical(state$reference_value, input$fixed_base_period)) {
+                        warnings <- c(
+                                warnings,
+                                "The displayed chart still uses the last applied settings. Click Update plot to apply the current reference period."
+                        )
+                }
+
+                if (!is.null(state)) {
+                        data <- state$data
+                        missing_rows <- data %>%
+                                filter(!complete) %>%
+                                distinct(time, missing_components)
+                        if (nrow(missing_rows) > 0) {
+                                warnings <- c(
+                                        warnings,
+                                        paste0(
+                                                "Contributions are incomplete for ",
+                                                nrow(missing_rows),
+                                                " month(s). Missing required observations involve: ",
+                                                paste(unique(missing_rows$missing_components), collapse = "; "),
+                                                ". The complete sum, allocated stack and residual are shown as gaps."
+                                        )
+                                )
+                        }
+
+                        allocation_rows <- data %>%
+                                filter(!level_allocation_complete) %>%
+                                distinct(time)
+                        if (nrow(allocation_rows) > nrow(missing_rows)) {
+                                warnings <- c(
+                                        warnings,
+                                        "Some component-level allocations are unavailable; those months are not drawn as complete stacks."
+                                )
+                        }
+
+                        residual_rows <- data %>%
+                                filter(significant_residual) %>%
+                                distinct(time, residual_pp)
+                        if (nrow(residual_rows) > 0) {
+                                warnings <- c(
+                                        warnings,
+                                        paste0(
+                                                "The absolute aggregation residual exceeds 0.05 percentage points in ",
+                                                nrow(residual_rows),
+                                                " month(s); maximum ",
+                                                format(max(abs(residual_rows$residual_pp), na.rm = TRUE), digits = 3),
+                                                " pp. Published parent changes have not been forced onto the component sum."
+                                        )
+                                )
+                        }
+
+                        stacking <- fixed_base_stacking_status(data)
+                        if (!stacking$supported) warnings <- c(warnings, stacking$message)
                 }
 
                 if (length(warnings) == 0) return(NULL)
                 tags$div(
                         class = "alert alert-warning",
-                        tags$strong("Contribution diagnostics"),
+                        tags$strong("Contribution status"),
                         tags$ul(lapply(warnings, tags$li))
                 )
         })
 
         output$plot_fixed_base <- renderPlotly({
-                data <- fixed_base_data()
-                raw <- fixed_base_raw_data()
-                base_label <- format(unique(data$base_period)[1], "%Y %B")
-                parent_code <- raw$selected_parent
-                country_code <- raw$setup$countries[1]
+                state <- fixed_base_result()
+                req(state)
+                data <- state$data
+                parent_code <- state$selected_parent
+                country_code <- state$selected_country
                 parent_label <- coicop_set_hierarchy %>%
                         filter(coicop18_code == parent_code) %>%
                         pull(code_label)
                 if (length(parent_label) == 0) parent_label <- parent_code
                 plot_title <- paste0(
-                        "Contributions to ", parent_label,
-                        " since ", base_label,
+                        "Index-level contributions to ", parent_label,
+                        " relative to ", state$reference_label,
                         " — ", country_code
                 ) %>%
                         stringr::str_wrap(width = 82) %>%
@@ -1241,128 +1348,85 @@ function(input, output, session) {
                 )
 
                 parent_data <- data %>%
-                        distinct(
-                                geo,
-                                time,
-                                parent_rebased,
-                                total_change_pct,
-                                contribution_sum_pp,
-                                residual_pp
-                        ) %>%
-                        arrange(time) %>%
-                        mutate(
-                                reconstructed_index = if_else(
-                                        is.na(contribution_sum_pp),
-                                        NA_real_,
-                                        100 + contribution_sum_pp
-                                ),
-                                published_hover = paste0(
-                                        "<b>", parent_label, "</b>",
-                                        "<br>", format(time, "%Y-%m"),
-                                        "<br>Published rebased index: ", round(parent_rebased, 3),
-                                        "<br>Total change: ", round(total_change_pct, 3), " %",
-                                        "<br>Contribution sum: ", round(contribution_sum_pp, 3), " pp",
-                                        "<br>Residual: ", round(residual_pp, 3), " pp"
-                                ),
-                                reconstructed_hover = paste0(
-                                        "<b>Reconstructed from contributions</b>",
-                                        "<br>", format(time, "%Y-%m"),
-                                        "<br>Reconstructed index: ", round(reconstructed_index, 3),
-                                        "<br>Contribution sum: ", round(contribution_sum_pp, 3), " pp",
-                                        "<br>Published rebased index: ", round(parent_rebased, 3),
-                                        "<br>Residual: ", round(residual_pp, 3), " pp"
-                                )
-                        )
-
-                top_plot <- plot_ly(
-                        parent_data,
-                        x = ~time,
-                        y = ~parent_rebased,
-                        type = "scatter",
-                        mode = "lines",
-                        name = "Published parent index",
-                        legendrank = 1,
-                        line = list(color = "#20322f", width = 3),
-                        text = ~published_hover,
-                        hoverinfo = "text",
-                        showlegend = TRUE
-                ) %>%
-                        add_trace(
-                                data = parent_data,
-                                x = ~time,
-                                y = ~reconstructed_index,
-                                type = "scatter",
-                                mode = "lines",
-                                inherit = FALSE,
-                                name = "Reconstructed from contributions",
-                                legendrank = 2,
-                                line = list(color = "#3f8f7a", width = 1.7, dash = "dash"),
-                                opacity = 0.82,
-                                text = ~reconstructed_hover,
-                                hoverinfo = "text",
-                                connectgaps = FALSE,
-                                showlegend = TRUE
-                ) %>%
-                        layout(
-                                yaxis = list(title = paste0("Index (", base_label, " = 100)"))
-                        )
-
-                component_styles <- component_style_map(data$code_label_wrapped)
-                bar_data <- data %>%
+                        distinct(geo, time, parent_rebased) %>%
+                        arrange(time)
+                component_data <- data %>%
                         arrange(code_label_wrapped, time) %>%
                         mutate(
                                 fixed_base_hover = paste0(
-                                        "<b>", code_label, "</b>",
-                                        "<br>", format(time, "%Y-%m"),
-                                        "<br>Contribution: ", round(contribution_pp, 3), " pp",
-                                        "<br>Total parent change: ", round(total_change_pct, 3), " %"
+                                        "<b>", format(time, "%Y-%m"), "</b>",
+                                        "<br><br>", code_label,
+                                        "<br><br>Contribution: ", sprintf("%+.3f", contribution_pp), " pp"
                                 )
                         )
-                bottom_plot <- add_styled_bar_traces(
-                        plot_ly(),
-                        bar_data,
-                        x_col = "time",
-                        y_col = "contribution_pp",
-                        style_map = component_styles,
-                        showlegend = TRUE,
-                        hover_col = "fixed_base_hover"
-                )
-                bottom_plot <- bottom_plot %>%
+                component_styles <- component_style_map(component_data$code_label_wrapped)
+                stacking <- fixed_base_stacking_status(component_data)
+
+                if (stacking$supported) {
+                        plotly_plot <- add_styled_bar_traces(
+                                plot_ly(),
+                                component_data,
+                                x_col = "time",
+                                y_col = "allocated_index_level_plot",
+                                style_map = component_styles,
+                                showlegend = TRUE,
+                                hover_col = "fixed_base_hover",
+                                hovertemplate = "%{text}<extra></extra>",
+                                textposition = "none"
+                        )
+                } else {
+                        plotly_plot <- plot_ly()
+                        for (label_value in component_styles$label) {
+                                trace_data <- component_data %>%
+                                        filter(code_label_wrapped == label_value) %>%
+                                        arrange(time)
+                                style_row <- component_styles[
+                                        match(label_value, component_styles$label),
+                                        ,
+                                        drop = FALSE
+                                ]
+                                plotly_plot <- plotly_plot %>%
+                                        add_trace(
+                                                data = trace_data,
+                                                x = ~time,
+                                                y = ~allocated_index_level_plot,
+                                                type = "scatter",
+                                                mode = "lines",
+                                                name = label_value,
+                                                legendgroup = label_value,
+                                                legendrank = 100 + match(label_value, component_styles$label),
+                                                line = list(color = style_row$color, width = 1.8),
+                                                text = ~fixed_base_hover,
+                                                hovertemplate = "%{text}<extra></extra>",
+                                                connectgaps = FALSE,
+                                                showlegend = TRUE,
+                                                inherit = FALSE
+                                        )
+                        }
+                }
+
+                plotly_plot %>%
                         add_trace(
                                 data = parent_data,
                                 x = ~time,
-                                y = ~total_change_pct,
+                                y = ~parent_rebased,
                                 type = "scatter",
                                 mode = "lines",
-                                name = "Total parent change",
-                                line = list(color = "black", dash = "dash", width = 1.5),
-                                text = ~published_hover,
-                                hoverinfo = "text",
+                                name = "Published parent index",
+                                legendrank = 1,
+                                line = list(color = "#20322f", width = 3.2, dash = "solid"),
+                                hovertemplate = paste0(
+                                        "<b>%{x|%Y-%m}</b><br><br>",
+                                        "Published HICP index: %{y:.3f}<extra></extra>"
+                                ),
+                                connectgaps = FALSE,
                                 showlegend = TRUE,
-                                legendrank = 3
+                                inherit = FALSE
                         ) %>%
                         layout(
-                                barmode = "relative",
-                                yaxis = list(title = "Contribution (percentage points)")
-                        )
-
-                subplot(
-                        top_plot,
-                        bottom_plot,
-                        nrows = 2,
-                        shareX = TRUE,
-                        titleX = TRUE,
-                        heights = c(0.38, 0.62),
-                        margin = 0.045
-                ) %>%
-                        layout(
-                                title = list(
-                                        text = plot_title,
-                                        x = 0.02
-                                ),
-                                # With one subplot column and shareX = TRUE,
-                                # plotly::subplot() maps both panels to xaxis.
-                                # Keep all view controls on that shared axis.
+                                title = list(text = plot_title, x = 0.02),
+                                barmode = "stack",
+                                bargap = 0.08,
                                 xaxis = list(
                                         title = "",
                                         type = "date",
@@ -1370,21 +1434,22 @@ function(input, output, session) {
                                         nticks = 10,
                                         tickformatstops = date_tickformat_stops,
                                         automargin = TRUE,
-                                        # This is a client-side view control. It does
-                                        # not filter fixed_base_data() or change the
-                                        # reference period used in the calculation.
                                         rangeslider = list(
                                                 visible = TRUE,
-                                                thickness = 0.08,
+                                                thickness = 0.07,
                                                 bgcolor = "rgba(238,247,244,0.55)",
                                                 bordercolor = "#d7e7e2",
                                                 borderwidth = 1
                                         )
                                 ),
-                                hovermode = "x unified",
+                                yaxis = list(
+                                        title = "Rebased index (reference period = 100)",
+                                        automargin = TRUE
+                                ),
+                                hovermode = "closest",
                                 legend = contribution_legend_layout("normal"),
-                                margin = contribution_plot_margin(right = 260, top = 78, bottom = 105),
-                                height = 820,
+                                margin = contribution_plot_margin(right = 260, top = 78, bottom = 100),
+                                height = 660,
                                 paper_bgcolor = "white",
                                 plot_bgcolor = "white"
                         ) %>%
@@ -2985,10 +3050,22 @@ function(input, output, session) {
                                         parent_code,
                                         component_code,
                                         code_label,
+                                        reference_type,
+                                        reference_period,
+                                        anchor_period,
                                         base_period,
                                         time,
                                         contribution_pp,
+                                        anchor_contribution_pp,
+                                        level_share,
+                                        base_level_allocation,
+                                        allocated_index_level,
+                                        allocated_level_sum,
+                                        level_allocation_complete,
+                                        negative_allocated_level,
                                         parent_rebased,
+                                        anchor_parent_rebased,
+                                        reconstructed_index,
                                         total_change_pct,
                                         partial_contribution_sum_pp,
                                         contribution_sum_pp,
