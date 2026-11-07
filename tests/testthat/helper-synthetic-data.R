@@ -1,5 +1,5 @@
-source(file.path("R", "contribution_core.R"))
-source(file.path("R", "contribution_fixed_base.R"))
+source(testthat::test_path("..", "..", "R", "contribution_core.R"))
+source(testthat::test_path("..", "..", "R", "contribution_fixed_base.R"))
 
 make_synthetic_hicp <- function() {
         dates <- seq.Date(as.Date("2020-12-01"), as.Date("2023-06-01"), by = "month")

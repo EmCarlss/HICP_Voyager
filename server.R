@@ -1225,12 +1225,25 @@ function(input, output, session) {
                         ) %>%
                         arrange(time) %>%
                         mutate(
-                                hover = paste0(
+                                reconstructed_index = if_else(
+                                        is.na(contribution_sum_pp),
+                                        NA_real_,
+                                        100 + contribution_sum_pp
+                                ),
+                                published_hover = paste0(
                                         "<b>", parent_label, "</b>",
                                         "<br>", format(time, "%Y-%m"),
-                                        "<br>Rebased index: ", round(parent_rebased, 3),
+                                        "<br>Published rebased index: ", round(parent_rebased, 3),
                                         "<br>Total change: ", round(total_change_pct, 3), " %",
                                         "<br>Contribution sum: ", round(contribution_sum_pp, 3), " pp",
+                                        "<br>Residual: ", round(residual_pp, 3), " pp"
+                                ),
+                                reconstructed_hover = paste0(
+                                        "<b>Reconstructed from contributions</b>",
+                                        "<br>", format(time, "%Y-%m"),
+                                        "<br>Reconstructed index: ", round(reconstructed_index, 3),
+                                        "<br>Contribution sum: ", round(contribution_sum_pp, 3), " pp",
+                                        "<br>Published rebased index: ", round(parent_rebased, 3),
                                         "<br>Residual: ", round(residual_pp, 3), " pp"
                                 )
                         )
@@ -1241,11 +1254,25 @@ function(input, output, session) {
                         y = ~parent_rebased,
                         type = "scatter",
                         mode = "lines",
-                        name = "Parent index",
+                        name = "Published parent index",
                         line = list(color = "#20322f", width = 2.5),
-                        text = ~hover,
+                        text = ~published_hover,
                         hoverinfo = "text",
                         showlegend = TRUE
+                ) %>%
+                        add_trace(
+                                data = parent_data,
+                                x = ~time,
+                                y = ~reconstructed_index,
+                                type = "scatter",
+                                mode = "lines",
+                                inherit = FALSE,
+                                name = "Reconstructed from contributions",
+                                line = list(color = "#3f8f7a", width = 2, dash = "dash"),
+                                text = ~reconstructed_hover,
+                                hoverinfo = "text",
+                                connectgaps = FALSE,
+                                showlegend = TRUE
                 ) %>%
                         layout(
                                 yaxis = list(title = paste0("Index (", base_label, " = 100)")),
@@ -1293,7 +1320,7 @@ function(input, output, session) {
                                 mode = "lines",
                                 name = "Total parent change",
                                 line = list(color = "black", dash = "dash", width = 1.5),
-                                text = ~hover,
+                                text = ~published_hover,
                                 hoverinfo = "text",
                                 showlegend = TRUE,
                                 legendrank = 1
