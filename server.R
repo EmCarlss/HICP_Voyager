@@ -1304,8 +1304,7 @@ function(input, output, session) {
                                 showlegend = TRUE
                 ) %>%
                         layout(
-                                yaxis = list(title = paste0("Index (", base_label, " = 100)")),
-                                xaxis = list(title = "", type = "date", showticklabels = FALSE)
+                                yaxis = list(title = paste0("Index (", base_label, " = 100)"))
                         )
 
                 component_styles <- component_style_map(data$code_label_wrapped)
@@ -1344,14 +1343,7 @@ function(input, output, session) {
                         ) %>%
                         layout(
                                 barmode = "relative",
-                                yaxis = list(title = "Contribution (percentage points)"),
-                                xaxis = list(
-                                        title = "",
-                                        type = "date",
-                                        nticks = 10,
-                                        tickformatstops = date_tickformat_stops,
-                                        automargin = TRUE
-                                )
+                                yaxis = list(title = "Contribution (percentage points)")
                         )
 
                 subplot(
@@ -1368,12 +1360,13 @@ function(input, output, session) {
                                         text = plot_title,
                                         x = 0.02
                                 ),
+                                # With one subplot column and shareX = TRUE,
+                                # plotly::subplot() maps both panels to xaxis.
+                                # Keep all view controls on that shared axis.
                                 xaxis = list(
+                                        title = "",
                                         type = "date",
-                                        showticklabels = FALSE
-                                ),
-                                xaxis2 = list(
-                                        type = "date",
+                                        showticklabels = TRUE,
                                         nticks = 10,
                                         tickformatstops = date_tickformat_stops,
                                         automargin = TRUE,

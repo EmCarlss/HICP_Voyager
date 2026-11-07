@@ -1225,6 +1225,47 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
 
                                                 tags$hr(),
 
+                                                tags$h3("Contributions since a fixed reference period"),
+                                                tags$p(
+                                                        "This method decomposes the selected HICP parent aggregate's percentage price change from a fixed base month to each subsequent month. ",
+                                                        "The components are the complete set of direct child aggregates in the ECOICOP hierarchy, and each contribution is expressed in percentage points of the parent aggregate's change."
+                                                ),
+                                                tags$p(
+                                                        "The calculation follows the additive decomposition for arbitrary time periods developed by Schwind and Weinand. ",
+                                                        "It uses annual component weights normalised against the selected parent, price-updates the base-period weights, and follows the HICP chain links at calendar-year boundaries."
+                                                ),
+                                                tags$p(
+                                                        "For a target month in a later year, equations (5)-(7) split each component's contribution into a base-year term, zero or more intervening full-year terms, and a current-year term. ",
+                                                        "This is a separate calculation from the Ribe contributions shown on the M/M-1 and M/M-12 tabs; it is not obtained by simply summing Voyager's existing monthly contributions."
+                                                ),
+                                                tags$p("When the direct-child partition and underlying data are complete, the additive relationship is:"),
+                                                tags$div(
+                                                        "$$",
+                                                        "100 \\times \\left(\\frac{P_t}{P_b} - 1\\right) = \\sum_i C_{i,b \\rightarrow t}",
+                                                        "$$"
+                                                ),
+                                                tags$p(
+                                                        "Published index levels and weights may be rounded, and some component observations may be unavailable. ",
+                                                        "The app therefore reports the residual between the published parent change and the complete contribution sum. Residuals are not allocated artificially to components, and incomplete sums are marked as missing."
+                                                ),
+                                                tags$p(
+                                                        "The current implementation supports monthly base periods only."
+                                                ),
+                                                tags$p(
+                                                        class = "help-muted",
+                                                        tags$strong("Reference: "),
+                                                        "Schwind, Patrick & Weinand, Sebastian (2026). ",
+                                                        tags$a(
+                                                                tags$em("Contributions to euro area inflation over arbitrary time periods"),
+                                                                href = "https://stats.unece.org/ottawagroup/download/Meeting_19_session6_paper_Schwind_Weinand_2026_Contributions_to_euro_area_inflation_over_arbitrary_time_periods.pdf",
+                                                                target = "_blank",
+                                                                rel = "noopener noreferrer"
+                                                        ),
+                                                        ". 19th Meeting of the Ottawa Group on Price Indices. See equations (5)-(7)."
+                                                ),
+
+                                                tags$hr(),
+
                                                 tags$h3("Ribe contributions"),
                                                 tags$p(
                                                         "The M/M-1 and M/M-12 tabs calculate Ribe-type contributions. ",
