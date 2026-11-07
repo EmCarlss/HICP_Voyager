@@ -414,10 +414,21 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                         "Index",
                         tags$div(
                                 class = "app-tab-page",
-                                tab_hero(
-                                        "Index",
-                                        "Compare HICP and HICP-CT index developments across countries and product categories. Rebase series to a common reference period, adjust lower-level indices for all-items inflation or compare selected country indices with the corresponding EU27 index.",
-                                        badges = c("HICP", "HICP-CT", "Rebasing", "Relative price index", "EU27 comparison")
+                                conditionalPanel(
+                                        condition = "!input.index_view_mode || input.index_view_mode == 'compare'",
+                                        tab_hero(
+                                                "Index",
+                                                "Compare HICP and HICP-CT index developments across countries and product categories. Rebase series to a common reference period, adjust lower-level indices for all-items inflation or compare selected country indices with the corresponding EU27 index.",
+                                                badges = c("HICP", "HICP-CT", "Rebasing", "Relative price index", "EU27 comparison")
+                                        )
+                                ),
+                                conditionalPanel(
+                                        condition = "input.index_view_mode == 'fixed_base'",
+                                        tab_hero(
+                                                "Index contributions",
+                                                "Decompose the price change of a selected HICP aggregate from a fixed reference month to every subsequent month into contributions from its direct ECOICOP children.",
+                                                badges = c("HICP", "ECOICOP", "Fixed reference period", "Contributions")
+                                        )
                                 ),
                                 fluidRow(
                                         column(
@@ -577,7 +588,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                 conditionalPanel(
                                                         condition = "input.index_view_mode == 'fixed_base'",
                                                         uiOutput("fixed_base_warning"),
-                                                        tags$div(class = "plot-card", plotlyOutput("plot_fixed_base", height = "760px"))
+                                                        tags$div(class = "plot-card", plotlyOutput("plot_fixed_base", height = "820px"))
                                                 )
                                         )
                                 )
@@ -972,12 +983,21 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                 class = "help-card",
                                                 tags$h3("Index"),
                                                 tags$p(
-                                                        "The Index tab is used to compare price index developments across countries and product categories. ",
-                                                        "You can select one or more countries, one or more COICOP aggregates, and either HICP, HICP-CT, or both."
+                                                        "The Index tab has two display modes. Compare indices is used to compare price index developments across countries and product categories. ",
+                                                        "Contributions since reference period decomposes the price change of one selected HICP parent aggregate from a fixed reference month."
                                                 ),
                                                 tags$table(
                                                         class = "help-table",
                                                         tags$tr(tags$th("Function"), tags$th("Description")),
+                                                        tags$tr(
+                                                                tags$td(tags$strong("Display mode")),
+                                                                tags$td(
+                                                                        tags$strong("Compare indices"),
+                                                                        " supports country and product comparisons, HICP/HICP-CT and the existing rebasing and adjustment options. ",
+                                                                        tags$strong("Contributions since reference period"),
+                                                                        " supports ordinary HICP for one country, one parent ECOICOP aggregate and a monthly reference period."
+                                                                )
+                                                        ),
                                                         tags$tr(
                                                                 tags$td(tags$strong("Country group quick selection")),
                                                                 tags$td("Select predefined groups such as EU, Euro area, Nordic, Baltic, Balkan or Benelux.")
@@ -1016,7 +1036,20 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                         tags$tr(
                                                                 tags$td(tags$strong("Index reference period")),
                                                                 tags$td("Rebases the selected series to either a full year average or to a specific month.")
+                                                        ),
+                                                        tags$tr(
+                                                                tags$td(tags$strong("Contributions from a fixed reference month")),
+                                                                tags$td(
+                                                                        "Decomposes the selected parent aggregate's percentage change into its complete set of direct ECOICOP children. ",
+                                                                        "The component sum should match the published parent change. The upper panel shows the published and reconstructed parent indices together, while the lower panel shows component contributions and the total change."
+                                                                )
                                                         )
+                                                ),
+                                                tags$div(
+                                                        class = "help-callout",
+                                                        tags$strong("Contribution diagnostics: "),
+                                                        "The reconstructed index equals 100 plus the complete component contribution sum. Residuals and missing observations are reported openly; incomplete component sums are not used to bridge gaps in the reconstructed series. ",
+                                                        "Fixed-base contributions currently support monthly reference periods only."
                                                 ),
                                                 tags$div(
                                                         class = "help-callout",

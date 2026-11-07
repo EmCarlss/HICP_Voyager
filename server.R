@@ -317,8 +317,8 @@ function(input, output, session) {
                 )
         }
 
-        contribution_plot_margin <- function(right = 190) {
-                list(l = 66, r = right, t = 44, b = 70)
+        contribution_plot_margin <- function(right = 190, top = 44, bottom = 70) {
+                list(l = 66, r = right, t = top, b = bottom)
         }
 
         subplot_margin_fraction <- function(total_height, gap_px = 36, min_fraction = 0.006, max_fraction = 0.075) {
@@ -600,7 +600,8 @@ function(input, output, session) {
                 y_col,
                 style_map,
                 showlegend = TRUE,
-                legend_col = "code_label_wrapped"
+                legend_col = "code_label_wrapped",
+                hover_col = NULL
         ) {
                 if (nrow(data) == 0 || nrow(style_map) == 0) return(plot)
 
@@ -625,6 +626,12 @@ function(input, output, session) {
                                 )
                         }
 
+                        hover_text <- if (!is.null(hover_col) && hover_col %in% names(trace_data)) {
+                                trace_data[[hover_col]]
+                        } else {
+                                NULL
+                        }
+
                         plot <- plot %>%
                                 add_trace(
                                         data = trace_data,
@@ -636,7 +643,8 @@ function(input, output, session) {
                                         showlegend = showlegend,
                                         legendrank = 100 + match(label_value, style_map$label),
                                         marker = marker_style,
-                                        hoverinfo = "all",
+                                        text = hover_text,
+                                        hoverinfo = if (is.null(hover_text)) "all" else "text",
                                         inherit = FALSE
                                 )
                 }
@@ -1103,6 +1111,7 @@ function(input, output, session) {
                 list(
                         setup = setup,
                         partition = partition,
+                        selected_parent = input$fixed_base_parent,
                         data_I = raw_data$data_I,
                         data_W = raw_data$data_W
                 )
@@ -1208,11 +1217,28 @@ function(input, output, session) {
 
         output$plot_fixed_base <- renderPlotly({
                 data <- fixed_base_data()
+                raw <- fixed_base_raw_data()
                 base_label <- format(unique(data$base_period)[1], "%Y %B")
+                parent_code <- raw$selected_parent
+                country_code <- raw$setup$countries[1]
                 parent_label <- coicop_set_hierarchy %>%
-                        filter(coicop18_code == input$fixed_base_parent) %>%
+                        filter(coicop18_code == parent_code) %>%
                         pull(code_label)
-                if (length(parent_label) == 0) parent_label <- input$fixed_base_parent
+                if (length(parent_label) == 0) parent_label <- parent_code
+                plot_title <- paste0(
+                        "Contributions to ", parent_label,
+                        " since ", base_label,
+                        " — ", country_code
+                ) %>%
+                        stringr::str_wrap(width = 82) %>%
+                        gsub("\n", "<br>", .)
+
+                date_tickformat_stops <- list(
+                        list(dtickrange = list(NULL, 604800000), value = "%d %b"),
+                        list(dtickrange = list(604800000, "M1"), value = "%d %b"),
+                        list(dtickrange = list("M1", "M12"), value = "%b<br>%Y"),
+                        list(dtickrange = list("M12", NULL), value = "%Y")
+                )
 
                 parent_data <- data %>%
                         distinct(
@@ -1255,7 +1281,8 @@ function(input, output, session) {
                         type = "scatter",
                         mode = "lines",
                         name = "Published parent index",
-                        line = list(color = "#20322f", width = 2.5),
+                        legendrank = 1,
+                        line = list(color = "#20322f", width = 3),
                         text = ~published_hover,
                         hoverinfo = "text",
                         showlegend = TRUE
@@ -1268,7 +1295,9 @@ function(input, output, session) {
                                 mode = "lines",
                                 inherit = FALSE,
                                 name = "Reconstructed from contributions",
-                                line = list(color = "#3f8f7a", width = 2, dash = "dash"),
+                                legendrank = 2,
+                                line = list(color = "#3f8f7a", width = 1.7, dash = "dash"),
+                                opacity = 0.82,
                                 text = ~reconstructed_hover,
                                 hoverinfo = "text",
                                 connectgaps = FALSE,
@@ -1276,41 +1305,29 @@ function(input, output, session) {
                 ) %>%
                         layout(
                                 yaxis = list(title = paste0("Index (", base_label, " = 100)")),
-                                xaxis = list(title = "", showticklabels = FALSE)
+                                xaxis = list(title = "", type = "date", showticklabels = FALSE)
                         )
 
                 component_styles <- component_style_map(data$code_label_wrapped)
-                bottom_plot <- plot_ly()
-                for (component_label in unique(data$code_label_wrapped)) {
-                        component_data <- data %>%
-                                filter(code_label_wrapped == component_label) %>%
-                                arrange(time) %>%
-                                mutate(
-                                        hover = paste0(
-                                                "<b>", code_label, "</b>",
-                                                "<br>", format(time, "%Y-%m"),
-                                                "<br>Contribution: ", round(contribution_pp, 3), " pp",
-                                                "<br>Total parent change: ", round(total_change_pct, 3), " %"
-                                        )
+                bar_data <- data %>%
+                        arrange(code_label_wrapped, time) %>%
+                        mutate(
+                                fixed_base_hover = paste0(
+                                        "<b>", code_label, "</b>",
+                                        "<br>", format(time, "%Y-%m"),
+                                        "<br>Contribution: ", round(contribution_pp, 3), " pp",
+                                        "<br>Total parent change: ", round(total_change_pct, 3), " %"
                                 )
-                        style <- component_styles[component_styles$label == component_label, , drop = FALSE]
-                        bottom_plot <- bottom_plot %>%
-                                add_trace(
-                                        data = component_data,
-                                        x = ~time,
-                                        y = ~contribution_pp,
-                                        type = "bar",
-                                        name = component_label,
-                                        marker = list(
-                                                color = style$color[1],
-                                                pattern = list(shape = style$pattern[1])
-                                        ),
-                                        text = ~hover,
-                                        hoverinfo = "text",
-                                        showlegend = TRUE,
-                                        legendgroup = component_label
-                                )
-                }
+                        )
+                bottom_plot <- add_styled_bar_traces(
+                        plot_ly(),
+                        bar_data,
+                        x_col = "time",
+                        y_col = "contribution_pp",
+                        style_map = component_styles,
+                        showlegend = TRUE,
+                        hover_col = "fixed_base_hover"
+                )
                 bottom_plot <- bottom_plot %>%
                         add_trace(
                                 data = parent_data,
@@ -1323,12 +1340,18 @@ function(input, output, session) {
                                 text = ~published_hover,
                                 hoverinfo = "text",
                                 showlegend = TRUE,
-                                legendrank = 1
+                                legendrank = 3
                         ) %>%
                         layout(
                                 barmode = "relative",
                                 yaxis = list(title = "Contribution (percentage points)"),
-                                xaxis = list(title = "", tickformat = "%Y-%m")
+                                xaxis = list(
+                                        title = "",
+                                        type = "date",
+                                        nticks = 10,
+                                        tickformatstops = date_tickformat_stops,
+                                        automargin = TRUE
+                                )
                         )
 
                 subplot(
@@ -1342,17 +1365,33 @@ function(input, output, session) {
                 ) %>%
                         layout(
                                 title = list(
-                                        text = paste0(
-                                                "Contributions to ", parent_label,
-                                                " since ", base_label,
-                                                " — ", unique(data$geo)[1]
-                                        ),
+                                        text = plot_title,
                                         x = 0.02
+                                ),
+                                xaxis = list(
+                                        type = "date",
+                                        showticklabels = FALSE
+                                ),
+                                xaxis2 = list(
+                                        type = "date",
+                                        nticks = 10,
+                                        tickformatstops = date_tickformat_stops,
+                                        automargin = TRUE,
+                                        # This is a client-side view control. It does
+                                        # not filter fixed_base_data() or change the
+                                        # reference period used in the calculation.
+                                        rangeslider = list(
+                                                visible = TRUE,
+                                                thickness = 0.08,
+                                                bgcolor = "rgba(238,247,244,0.55)",
+                                                bordercolor = "#d7e7e2",
+                                                borderwidth = 1
+                                        )
                                 ),
                                 hovermode = "x unified",
                                 legend = contribution_legend_layout("normal"),
-                                margin = contribution_plot_margin(right = 230),
-                                height = 760,
+                                margin = contribution_plot_margin(right = 260, top = 78, bottom = 105),
+                                height = 820,
                                 paper_bgcolor = "white",
                                 plot_bgcolor = "white"
                         ) %>%
