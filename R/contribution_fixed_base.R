@@ -335,33 +335,6 @@ valid_fixed_base_months <- function(index_data, weight_data, parent_code, compon
         }, logical(1))]
 }
 
-fixed_base_chain_link_complete <- function(
-        index_data,
-        weight_data,
-        parent_code,
-        component_codes,
-        year
-) {
-        needed_codes <- c(parent_code, component_codes)
-        geographies <- sort(unique(as.character(index_data$geo)))
-        december_previous <- as.Date(sprintf("%d-12-01", year - 1L))
-
-        all(vapply(geographies, function(geo) {
-                december_ok <- vapply(needed_codes, function(code) {
-                        !is.na(fixed_base_lookup(
-                                index_data,
-                                geo,
-                                code,
-                                period = december_previous
-                        ))
-                }, logical(1))
-                weights_ok <- vapply(needed_codes, function(code) {
-                        !is.na(fixed_base_lookup(weight_data, geo, code, year = year))
-                }, logical(1))
-                all(december_ok) && all(weights_ok)
-        }, logical(1)))
-}
-
 select_fixed_base_year_anchor <- function(
         index_data,
         weight_data,
@@ -379,8 +352,7 @@ select_fixed_base_year_anchor <- function(
                 return(list(
                         valid = FALSE,
                         anchor_period = as.Date(NA),
-                        history_limited = FALSE,
-                        history_limit_reason = "The full-year reference is invalid."
+                        invalid_reason = "The full-year reference is invalid."
                 ))
         }
 
@@ -393,92 +365,25 @@ select_fixed_base_year_anchor <- function(
                 )
         }
         valid_months <- sort(fixed_base_month(valid_months))
-        reference_months <- valid_months[
-                format(valid_months, "%Y") == as.character(reference_year)
-        ]
-        reference_month_numbers <- sort(unique(as.integer(format(reference_months, "%m"))))
-        if (!identical(reference_month_numbers, 1:12)) {
+        expected_months <- as.Date(sprintf("%d-%02d-01", reference_year, 1:12))
+        if (!all(expected_months %in% valid_months)) {
                 return(list(
                         valid = FALSE,
                         anchor_period = as.Date(NA),
-                        history_limited = FALSE,
-                        history_limit_reason = paste(
+                        invalid_reason = paste(
                                 "Full-year reference", reference_year,
-                                "is incomplete; all twelve complete monthly observations are required."
+                                paste0(
+                                        "is incomplete; all twelve monthly indices, the ",
+                                        "reference-year weights and the preceding December links are required."
+                                )
                         )
                 ))
-        }
-
-        reference_start <- as.Date(sprintf("%d-01-01", reference_year))
-        candidates <- valid_months[valid_months <= reference_start]
-        if (length(candidates) == 0) {
-                return(list(
-                        valid = FALSE,
-                        anchor_period = as.Date(NA),
-                        history_limited = FALSE,
-                        history_limit_reason = paste(
-                                "No complete monthly anchor is available for full year",
-                                reference_year, "."
-                        )
-                ))
-        }
-
-        prepared_index <- index_data[, c("geo", "coicop18", "time", "values")]
-        prepared_weight <- weight_data[, c("geo", "coicop18", "time", "values")]
-        prepared_index$.period <- fixed_base_month(prepared_index$time)
-        prepared_weight$.year <- as.integer(format(as.Date(prepared_weight$time), "%Y"))
-
-        first_candidate_year <- min(as.integer(format(candidates, "%Y")))
-        chain_years <- seq.int(first_candidate_year, reference_year)
-        complete_links <- vapply(chain_years, function(year) {
-                fixed_base_chain_link_complete(
-                        prepared_index,
-                        prepared_weight,
-                        parent_code,
-                        component_codes,
-                        year
-                )
-        }, logical(1))
-        broken_years <- chain_years[!complete_links]
-        latest_broken_year <- if (length(broken_years) == 0) {
-                first_candidate_year - 1L
-        } else {
-                max(broken_years)
-        }
-
-        candidate_years <- as.integer(format(candidates, "%Y"))
-        usable_candidates <- candidates[candidate_years > latest_broken_year]
-        if (length(usable_candidates) == 0) {
-                return(list(
-                        valid = FALSE,
-                        anchor_period = as.Date(NA),
-                        history_limited = FALSE,
-                        history_limit_reason = paste(
-                                "The chain is incomplete; no monthly anchor reaches full year",
-                                reference_year, "."
-                        )
-                ))
-        }
-
-        anchor_period <- min(usable_candidates)
-        history_limited <- anchor_period > min(candidates)
-        history_limit_reason <- if (history_limited) {
-                paste0(
-                        "The full-year series starts in ", format(anchor_period, "%Y-%m"),
-                        " because annual weights or December chain links are incomplete through ",
-                        latest_broken_year, "."
-                )
-        } else {
-                ""
         }
 
         list(
                 valid = TRUE,
-                anchor_period = anchor_period,
-                history_limited = history_limited,
-                history_limit_reason = history_limit_reason,
-                latest_broken_year = if (history_limited) latest_broken_year else NA_integer_,
-                chain_years_checked = chain_years
+                anchor_period = expected_months[1],
+                invalid_reason = ""
         )
 }
 
@@ -624,9 +529,7 @@ calculate_reference_period_contributions <- function(
                 contribution_data$anchor_parent_rebased <- contribution_data$parent_rebased
                 contribution_data$reference_type <- "month"
                 contribution_data$reference_period <- reference_month
-                contribution_data$history_start_period <- reference_month
-                contribution_data$history_limited <- FALSE
-                contribution_data$history_limit_reason <- ""
+                result_start <- reference_month
         } else {
                 reference_year <- if (inherits(reference_period, "Date")) {
                         as.integer(format(reference_period, "%Y"))
@@ -641,7 +544,7 @@ calculate_reference_period_contributions <- function(
                         reference_year = reference_year
                 )
                 if (!isTRUE(anchor$valid)) {
-                        stop(anchor$history_limit_reason)
+                        stop(anchor$invalid_reason)
                 }
                 anchor_period <- anchor$anchor_period
                 anchored_data <- calculate_fixed_base_contributions(
@@ -657,10 +560,14 @@ calculate_reference_period_contributions <- function(
                         reference_year,
                         residual_tolerance = residual_tolerance
                 )
-                contribution_data$history_start_period <- anchor_period
-                contribution_data$history_limited <- anchor$history_limited
-                contribution_data$history_limit_reason <- anchor$history_limit_reason
+                result_start <- as.Date(sprintf("%d-01-01", reference_year))
         }
 
+        contribution_data <- contribution_data[
+                contribution_data$time >= result_start,
+                ,
+                drop = FALSE
+        ]
+        rownames(contribution_data) <- NULL
         contribution_data
 }
