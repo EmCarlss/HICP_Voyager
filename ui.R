@@ -1049,15 +1049,14 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                                 tags$td(tags$strong("Contributions from a reference period")),
                                                                 tags$td(
                                                                         "Decomposes the selected parent aggregate's percentage change into its complete set of direct ECOICOP children. ",
-                                                                        "The combined chart allocates the rebased index level across stacked components and overlays the published parent index. The difference between the stack top and the line is the unallocated aggregation residual."
+                                                                        "The combined chart stacks cumulative component contributions above and below zero and overlays the published parent's cumulative change since the reference period."
                                                                 )
                                                         )
                                                 ),
                                                 tags$div(
                                                         class = "help-callout",
                                                         tags$strong("Contribution diagnostics: "),
-                                                        "The allocated stack equals 100 plus the complete component contribution sum. Residuals and missing observations are reported openly; incomplete component sums create gaps rather than partial stacks. ",
-                                                        "If an allocated component level is negative, the chart switches to non-stacked component lines because positive and negative Plotly bars would not have the correct algebraic top."
+                                                        "The reference period's rebased index is 100, but the graph uses zero because it shows the cumulative change from 100. Residuals and missing observations are reported openly; incomplete component sums create gaps rather than partial stacks."
                                                 ),
                                                 tags$div(
                                                         class = "help-callout",
@@ -1268,20 +1267,20 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                 tags$p(
                                                         "This derived change-of-reference transformation gives the published parent index an annual mean of 100 and each component contribution an annual mean of zero. It preserves an additive decomposition when the anchor decomposition is additive. A year is offered only when all twelve months and a complete annual-weight/December-link chain are available. The anchor starts after the latest broken link, and any resulting history limit is reported explicitly."
                                                 ),
-                                                tags$h4("Allocated index levels used in the chart"),
+                                                tags$h4("Cumulative contributions shown in the chart"),
                                                 tags$p(
-                                                        "The Schwind–Weinand result is a contribution to price change, not a decomposition of the index level. For presentation, Voyager separately derives a normalized level share s[i] from price-updated component weights. The plotted component level is:"
+                                                        "The chart displays each Schwind–Weinand contribution directly in percentage points around zero. The rebased parent index has reference level 100, so the dark published line is shown as its cumulative change from that level:"
                                                 ),
                                                 tags$div(
                                                         "$$",
-                                                        "L_{i,t} = 100 s_i + C_{i,t}, \\qquad \\sum_i s_i = 1.",
+                                                        "PublishedChange_t = PublishedIndex_t - 100 = \\sum_i C_{i,t} + Residual_t.",
                                                         "$$"
                                                 ),
                                                 tags$p(
-                                                        "For a monthly reference, shares use that month's price-updated weights. For a full-year reference, they use the average of the twelve monthly price-updated weights before normalisation. This level allocation is Voyager's derived visualisation measure; it does not change the published weights or the Schwind–Weinand contributions. Residuals are never distributed across components."
+                                                        "Positive contributions are stacked upward from zero and negative contributions downward. Residuals are never distributed across components. If contributions include both signs, the published line need not coincide with the positive stack's upper edge because the contribution sum is algebraic."
                                                 ),
                                                 tags$p(
-                                                        "The bar hover reports the original change contribution in percentage points, even though the bar height is the allocated index level. If any allocated level is negative, components are shown as separate lines instead of a misleading positive/negative stack."
+                                                        "If a month is missing any required component contribution, all component bars for that month are omitted rather than showing an apparently complete decomposition. The published cumulative-change line remains visible where the parent observation is available."
                                                 ),
                                                 tags$p(
                                                         class = "help-muted",
