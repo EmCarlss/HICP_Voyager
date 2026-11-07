@@ -426,8 +426,8 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                         condition = "input.index_view_mode == 'fixed_base'",
                                         tab_hero(
                                                 "Index contributions",
-                                                "Decompose the price change of a selected HICP aggregate from a fixed reference month to every subsequent month into contributions from its direct ECOICOP children.",
-                                                badges = c("HICP", "ECOICOP", "Fixed reference period", "Contributions")
+                                                "Decompose a selected HICP aggregate relative to a monthly or full-year reference period into contributions from its direct ECOICOP children.",
+                                                badges = c("HICP", "ECOICOP", "Reference periods", "Contributions")
                                         )
                                 ),
                                 fluidRow(
@@ -565,15 +565,23 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                                 ),
                                                                 control_group(
                                                                         "Reference period",
+                                                                        radioButtons(
+                                                                                "fixed_base_period_type",
+                                                                                "Index reference period",
+                                                                                choices = c("Full year", "Month"),
+                                                                                selected = "Month"
+                                                                        ),
                                                                         selectInput(
                                                                                 "fixed_base_period",
-                                                                                "Select monthly reference period",
+                                                                                "Select index reference period",
                                                                                 choices = ""
                                                                         ),
-                                                                        note = paste(
-                                                                                "Monthly reference periods use the exact arbitrary-period method.",
-                                                                                "Full-year bases remain available in Compare indices only."
-                                                                        )
+                                                                        actionButton(
+                                                                                "fixed_base_update",
+                                                                                "Update plot",
+                                                                                class = "secondary-action-btn"
+                                                                        ),
+                                                                        note = "Retrieve data first, then apply a complete full year or a specific month without another Eurostat request."
                                                                 ),
                                                                 download_panel("output.plot_fixed_base", "downloadData_fixed_base")
                                                         )
@@ -588,7 +596,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                 conditionalPanel(
                                                         condition = "input.index_view_mode == 'fixed_base'",
                                                         uiOutput("fixed_base_warning"),
-                                                        tags$div(class = "plot-card", plotlyOutput("plot_fixed_base", height = "820px"))
+                                                        tags$div(class = "plot-card", plotlyOutput("plot_fixed_base", height = "660px"))
                                                 )
                                         )
                                 )
@@ -984,7 +992,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                 tags$h3("Index"),
                                                 tags$p(
                                                         "The Index tab has two display modes. Compare indices is used to compare price index developments across countries and product categories. ",
-                                                        "Contributions since reference period decomposes the price change of one selected HICP parent aggregate from a fixed reference month."
+                                                        "Contributions since reference period decomposes one selected HICP parent aggregate relative to a monthly or full-year reference period."
                                                 ),
                                                 tags$table(
                                                         class = "help-table",
@@ -995,7 +1003,7 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                                         tags$strong("Compare indices"),
                                                                         " supports country and product comparisons, HICP/HICP-CT and the existing rebasing and adjustment options. ",
                                                                         tags$strong("Contributions since reference period"),
-                                                                        " supports ordinary HICP for one country, one parent ECOICOP aggregate and a monthly reference period."
+                                                                        " supports ordinary HICP for one country, one parent ECOICOP aggregate and either a monthly or complete full-year reference period."
                                                                 )
                                                         ),
                                                         tags$tr(
@@ -1038,18 +1046,18 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                                 tags$td("Rebases the selected series to either a full year average or to a specific month.")
                                                         ),
                                                         tags$tr(
-                                                                tags$td(tags$strong("Contributions from a fixed reference month")),
+                                                                tags$td(tags$strong("Contributions from a reference period")),
                                                                 tags$td(
                                                                         "Decomposes the selected parent aggregate's percentage change into its complete set of direct ECOICOP children. ",
-                                                                        "The component sum should match the published parent change. The upper panel shows the published and reconstructed parent indices together, while the lower panel shows component contributions and the total change."
+                                                                        "The combined chart allocates the rebased index level across stacked components and overlays the published parent index. The difference between the stack top and the line is the unallocated aggregation residual."
                                                                 )
                                                         )
                                                 ),
                                                 tags$div(
                                                         class = "help-callout",
                                                         tags$strong("Contribution diagnostics: "),
-                                                        "The reconstructed index equals 100 plus the complete component contribution sum. Residuals and missing observations are reported openly; incomplete component sums are not used to bridge gaps in the reconstructed series. ",
-                                                        "Fixed-base contributions currently support monthly reference periods only."
+                                                        "The allocated stack equals 100 plus the complete component contribution sum. Residuals and missing observations are reported openly; incomplete component sums create gaps rather than partial stacks. ",
+                                                        "If an allocated component level is negative, the chart switches to non-stacked component lines because positive and negative Plotly bars would not have the correct algebraic top."
                                                 ),
                                                 tags$div(
                                                         class = "help-callout",
@@ -1225,9 +1233,9 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
 
                                                 tags$hr(),
 
-                                                tags$h3("Contributions since a fixed reference period"),
+                                                tags$h3("Contributions since a reference period"),
                                                 tags$p(
-                                                        "This method decomposes the selected HICP parent aggregate's percentage price change from a fixed base month to each subsequent month. ",
+                                                        "For a monthly reference, the method decomposes the selected HICP parent aggregate's percentage price change from the selected base month to each subsequent month. ",
                                                         "The components are the complete set of direct child aggregates in the ECOICOP hierarchy, and each contribution is expressed in percentage points of the parent aggregate's change."
                                                 ),
                                                 tags$p(
@@ -1248,8 +1256,32 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                         "Published index levels and weights may be rounded, and some component observations may be unavailable. ",
                                                         "The app therefore reports the residual between the published parent change and the complete contribution sum. Residuals are not allocated artificially to components, and incomplete sums are marked as missing."
                                                 ),
+                                                tags$h4("Full-year references"),
                                                 tags$p(
-                                                        "The current implementation supports monthly base periods only."
+                                                        "For a full-year reference, the app first calculates monthly contributions from a common complete anchor month. Let R[t] be the parent index rebased to that anchor, C[i,t] the corresponding component contribution, and A the mean of R over all twelve months in the selected year. The displayed transformation is:"
+                                                ),
+                                                tags$div(
+                                                        "$$",
+                                                        "R^{year}_t = 100 R_t / A, \\qquad C^{year}_{i,t} = (100/A)(C_{i,t} - \\overline{C}_{i,year}).",
+                                                        "$$"
+                                                ),
+                                                tags$p(
+                                                        "This derived change-of-reference transformation gives the published parent index an annual mean of 100 and each component contribution an annual mean of zero. It preserves an additive decomposition when the anchor decomposition is additive. A year is offered only when all twelve months and a complete annual-weight/December-link chain are available. The anchor starts after the latest broken link, and any resulting history limit is reported explicitly."
+                                                ),
+                                                tags$h4("Allocated index levels used in the chart"),
+                                                tags$p(
+                                                        "The Schwind–Weinand result is a contribution to price change, not a decomposition of the index level. For presentation, Voyager separately derives a normalized level share s[i] from price-updated component weights. The plotted component level is:"
+                                                ),
+                                                tags$div(
+                                                        "$$",
+                                                        "L_{i,t} = 100 s_i + C_{i,t}, \\qquad \\sum_i s_i = 1.",
+                                                        "$$"
+                                                ),
+                                                tags$p(
+                                                        "For a monthly reference, shares use that month's price-updated weights. For a full-year reference, they use the average of the twelve monthly price-updated weights before normalisation. This level allocation is Voyager's derived visualisation measure; it does not change the published weights or the Schwind–Weinand contributions. Residuals are never distributed across components."
+                                                ),
+                                                tags$p(
+                                                        "The bar hover reports the original change contribution in percentage points, even though the bar height is the allocated index level. If any allocated level is negative, components are shown as separate lines instead of a misleading positive/negative stack."
                                                 ),
                                                 tags$p(
                                                         class = "help-muted",

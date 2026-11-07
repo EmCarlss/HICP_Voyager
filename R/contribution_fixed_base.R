@@ -28,6 +28,32 @@ fixed_base_component_term <- function(weight_share, scale, end_index, start_inde
         weight_share * scale * (end_index / start_index - 1) * 100
 }
 
+fixed_base_price_updated_weight <- function(
+        index_data,
+        weight_data,
+        geo,
+        parent_code,
+        component_code,
+        period
+) {
+        period <- fixed_base_month(period)
+        year <- as.integer(format(period, "%Y"))
+        december_previous <- as.Date(sprintf("%d-12-01", year - 1L))
+
+        annual_share <- normalise_component_weight(
+                fixed_base_lookup(weight_data, geo, component_code, year = year),
+                fixed_base_lookup(weight_data, geo, parent_code, year = year)
+        )
+
+        price_update_weight(
+                annual_share,
+                fixed_base_lookup(index_data, geo, component_code, period = period),
+                fixed_base_lookup(index_data, geo, component_code, period = december_previous),
+                fixed_base_lookup(index_data, geo, parent_code, period = period),
+                fixed_base_lookup(index_data, geo, parent_code, period = december_previous)
+        )
+}
+
 fixed_base_contribution_one <- function(
         index_data,
         weight_data,
@@ -41,21 +67,15 @@ fixed_base_contribution_one <- function(
         target_period <- fixed_base_month(target_period)
         base_year <- as.integer(format(base_period, "%Y"))
         target_year <- as.integer(format(target_period, "%Y"))
-        december_before_base_year <- as.Date(sprintf("%d-12-01", base_year - 1L))
-
         parent_base <- fixed_base_lookup(index_data, geo, parent_code, period = base_period)
         component_base <- fixed_base_lookup(index_data, geo, component_code, period = base_period)
-        parent_reference <- fixed_base_lookup(index_data, geo, parent_code, period = december_before_base_year)
-        component_reference <- fixed_base_lookup(index_data, geo, component_code, period = december_before_base_year)
-        component_weight <- fixed_base_lookup(weight_data, geo, component_code, year = base_year)
-        parent_weight <- fixed_base_lookup(weight_data, geo, parent_code, year = base_year)
-        annual_share <- normalise_component_weight(component_weight, parent_weight)
-        base_weight <- price_update_weight(
-                annual_share,
-                component_base,
-                component_reference,
-                parent_base,
-                parent_reference
+        base_weight <- fixed_base_price_updated_weight(
+                index_data,
+                weight_data,
+                geo,
+                parent_code,
+                component_code,
+                base_period
         )
 
         if (target_period == base_period) return(0)
@@ -313,4 +333,475 @@ valid_fixed_base_months <- function(index_data, weight_data, parent_code, compon
                         all(current_ok) && all(reference_ok) && all(weights_ok)
                 }, logical(1)))
         }, logical(1))]
+}
+
+fixed_base_chain_link_complete <- function(
+        index_data,
+        weight_data,
+        parent_code,
+        component_codes,
+        year
+) {
+        needed_codes <- c(parent_code, component_codes)
+        geographies <- sort(unique(as.character(index_data$geo)))
+        december_previous <- as.Date(sprintf("%d-12-01", year - 1L))
+
+        all(vapply(geographies, function(geo) {
+                december_ok <- vapply(needed_codes, function(code) {
+                        !is.na(fixed_base_lookup(
+                                index_data,
+                                geo,
+                                code,
+                                period = december_previous
+                        ))
+                }, logical(1))
+                weights_ok <- vapply(needed_codes, function(code) {
+                        !is.na(fixed_base_lookup(weight_data, geo, code, year = year))
+                }, logical(1))
+                all(december_ok) && all(weights_ok)
+        }, logical(1)))
+}
+
+select_fixed_base_year_anchor <- function(
+        index_data,
+        weight_data,
+        parent_code,
+        component_codes,
+        reference_year,
+        valid_months = NULL
+) {
+        reference_year <- if (inherits(reference_year, "Date")) {
+                as.integer(format(reference_year, "%Y"))
+        } else {
+                as.integer(reference_year)
+        }
+        if (!is.finite(reference_year)) {
+                return(list(
+                        valid = FALSE,
+                        anchor_period = as.Date(NA),
+                        history_limited = FALSE,
+                        history_limit_reason = "The full-year reference is invalid."
+                ))
+        }
+
+        if (is.null(valid_months)) {
+                valid_months <- valid_fixed_base_months(
+                        index_data,
+                        weight_data,
+                        parent_code,
+                        component_codes
+                )
+        }
+        valid_months <- sort(fixed_base_month(valid_months))
+        reference_months <- valid_months[
+                format(valid_months, "%Y") == as.character(reference_year)
+        ]
+        reference_month_numbers <- sort(unique(as.integer(format(reference_months, "%m"))))
+        if (!identical(reference_month_numbers, 1:12)) {
+                return(list(
+                        valid = FALSE,
+                        anchor_period = as.Date(NA),
+                        history_limited = FALSE,
+                        history_limit_reason = paste(
+                                "Full-year reference", reference_year,
+                                "is incomplete; all twelve complete monthly observations are required."
+                        )
+                ))
+        }
+
+        reference_start <- as.Date(sprintf("%d-01-01", reference_year))
+        candidates <- valid_months[valid_months <= reference_start]
+        if (length(candidates) == 0) {
+                return(list(
+                        valid = FALSE,
+                        anchor_period = as.Date(NA),
+                        history_limited = FALSE,
+                        history_limit_reason = paste(
+                                "No complete monthly anchor is available for full year",
+                                reference_year, "."
+                        )
+                ))
+        }
+
+        prepared_index <- index_data[, c("geo", "coicop18", "time", "values")]
+        prepared_weight <- weight_data[, c("geo", "coicop18", "time", "values")]
+        prepared_index$.period <- fixed_base_month(prepared_index$time)
+        prepared_weight$.year <- as.integer(format(as.Date(prepared_weight$time), "%Y"))
+
+        first_candidate_year <- min(as.integer(format(candidates, "%Y")))
+        chain_years <- seq.int(first_candidate_year, reference_year)
+        complete_links <- vapply(chain_years, function(year) {
+                fixed_base_chain_link_complete(
+                        prepared_index,
+                        prepared_weight,
+                        parent_code,
+                        component_codes,
+                        year
+                )
+        }, logical(1))
+        broken_years <- chain_years[!complete_links]
+        latest_broken_year <- if (length(broken_years) == 0) {
+                first_candidate_year - 1L
+        } else {
+                max(broken_years)
+        }
+
+        candidate_years <- as.integer(format(candidates, "%Y"))
+        usable_candidates <- candidates[candidate_years > latest_broken_year]
+        if (length(usable_candidates) == 0) {
+                return(list(
+                        valid = FALSE,
+                        anchor_period = as.Date(NA),
+                        history_limited = FALSE,
+                        history_limit_reason = paste(
+                                "The chain is incomplete; no monthly anchor reaches full year",
+                                reference_year, "."
+                        )
+                ))
+        }
+
+        anchor_period <- min(usable_candidates)
+        history_limited <- anchor_period > min(candidates)
+        history_limit_reason <- if (history_limited) {
+                paste0(
+                        "The full-year series starts in ", format(anchor_period, "%Y-%m"),
+                        " because annual weights or December chain links are incomplete through ",
+                        latest_broken_year, "."
+                )
+        } else {
+                ""
+        }
+
+        list(
+                valid = TRUE,
+                anchor_period = anchor_period,
+                history_limited = history_limited,
+                history_limit_reason = history_limit_reason,
+                latest_broken_year = if (history_limited) latest_broken_year else NA_integer_,
+                chain_years_checked = chain_years
+        )
+}
+
+valid_fixed_base_years <- function(index_data, weight_data, parent_code, component_codes) {
+        months <- valid_fixed_base_months(
+                index_data,
+                weight_data,
+                parent_code,
+                component_codes
+        )
+        if (length(months) == 0) return(integer(0))
+
+        years <- sort(unique(as.integer(format(months, "%Y"))))
+        locally_complete <- years[vapply(years, function(year) {
+                year_months <- as.integer(format(months[format(months, "%Y") == as.character(year)], "%m"))
+                identical(sort(unique(year_months)), 1:12)
+        }, logical(1))]
+
+        locally_complete[vapply(locally_complete, function(year) {
+                anchor <- select_fixed_base_year_anchor(
+                        index_data,
+                        weight_data,
+                        parent_code,
+                        component_codes,
+                        reference_year = year,
+                        valid_months = months
+                )
+                isTRUE(anchor$valid)
+        }, logical(1))]
+}
+
+fixed_base_level_shares <- function(
+        index_data,
+        weight_data,
+        parent_code,
+        component_codes,
+        reference_type = c("month", "year"),
+        reference_period
+) {
+        reference_type <- match.arg(reference_type)
+        index_data <- index_data[, c("geo", "coicop18", "time", "values")]
+        weight_data <- weight_data[, c("geo", "coicop18", "time", "values")]
+        index_data$.period <- fixed_base_month(index_data$time)
+        weight_data$.year <- as.integer(format(as.Date(weight_data$time), "%Y"))
+
+        periods <- if (reference_type == "month") {
+                fixed_base_month(reference_period)
+        } else {
+                reference_year <- if (inherits(reference_period, "Date")) {
+                        as.integer(format(reference_period, "%Y"))
+                } else {
+                        as.integer(reference_period)
+                }
+                as.Date(sprintf("%d-%02d-01", reference_year, 1:12))
+        }
+
+        geographies <- sort(unique(as.character(index_data$geo)))
+        output <- vector("list", length(geographies))
+
+        for (geo_index in seq_along(geographies)) {
+                geo <- geographies[geo_index]
+                monthly_weights <- matrix(
+                        unlist(lapply(periods, function(period) {
+                                vapply(component_codes, function(component_code) {
+                                        fixed_base_price_updated_weight(
+                                                index_data,
+                                                weight_data,
+                                                geo,
+                                                parent_code,
+                                                component_code,
+                                                period
+                                        )
+                                }, numeric(1))
+                        })),
+                        nrow = length(component_codes),
+                        ncol = length(periods)
+                )
+
+                complete <- all(is.finite(monthly_weights))
+                average_weights <- if (complete) rowMeans(monthly_weights) else rep(NA_real_, length(component_codes))
+                weight_total <- sum(average_weights)
+                shares <- if (!complete || !is.finite(weight_total) || weight_total <= 0) {
+                        rep(NA_real_, length(component_codes))
+                } else {
+                        average_weights / weight_total
+                }
+
+                output[[geo_index]] <- data.frame(
+                        geo = geo,
+                        component_code = component_codes,
+                        level_share = shares,
+                        base_level_allocation = 100 * shares,
+                        stringsAsFactors = FALSE
+                )
+        }
+
+        do.call(rbind, output)
+}
+
+transform_fixed_base_to_full_year <- function(
+        contribution_data,
+        reference_year,
+        residual_tolerance = 0.05
+) {
+        reference_year <- if (inherits(reference_year, "Date")) {
+                as.integer(format(reference_year, "%Y"))
+        } else {
+                as.integer(reference_year)
+        }
+        required_columns <- c(
+                "geo", "time", "component_code", "contribution_pp",
+                "parent_rebased", "complete"
+        )
+        if (!all(required_columns %in% names(contribution_data))) {
+                stop("Contribution data do not contain the fields required for a full-year transformation.")
+        }
+
+        output <- contribution_data
+        output$anchor_period <- output$base_period
+        output$anchor_contribution_pp <- output$contribution_pp
+        output$anchor_parent_rebased <- output$parent_rebased
+        output$reference_type <- "year"
+        output$reference_period <- as.Date(sprintf("%d-01-01", reference_year))
+
+        expected_months <- as.Date(sprintf("%d-%02d-01", reference_year, 1:12))
+        for (geo in unique(as.character(output$geo))) {
+                geo_rows <- output$geo == geo
+                reference_rows <- geo_rows & format(output$time, "%Y") == as.character(reference_year)
+                reference_periods <- sort(unique(output$time[reference_rows]))
+                if (!identical(reference_periods, expected_months)) {
+                        stop("A full-year reference period requires all twelve monthly parent observations.")
+                }
+
+                reference_complete <- output[reference_rows, , drop = FALSE]
+                if (any(!reference_complete$complete) || any(is.na(reference_complete$contribution_pp))) {
+                        stop("A full-year reference period requires complete component contributions for all twelve months.")
+                }
+
+                parent_reference <- output[reference_rows, c("time", "parent_rebased"), drop = FALSE]
+                parent_reference <- parent_reference[!duplicated(parent_reference$time), , drop = FALSE]
+                annual_parent_mean <- mean(parent_reference$parent_rebased)
+                if (!is.finite(annual_parent_mean) || annual_parent_mean == 0) {
+                        stop("The full-year parent-index average must be finite and non-zero.")
+                }
+                scale <- 100 / annual_parent_mean
+
+                component_means <- tapply(
+                        output$contribution_pp[reference_rows],
+                        output$component_code[reference_rows],
+                        mean
+                )
+                matched_means <- unname(component_means[output$component_code[geo_rows]])
+                output$contribution_pp[geo_rows] <- scale * (
+                        output$anchor_contribution_pp[geo_rows] - matched_means
+                )
+                output$parent_rebased[geo_rows] <- scale * output$anchor_parent_rebased[geo_rows]
+                output$total_change_pct[geo_rows] <- output$parent_rebased[geo_rows] - 100
+
+                geo_periods <- sort(unique(output$time[geo_rows]))
+                for (period in geo_periods) {
+                        period <- fixed_base_month(period)
+                        period_rows <- geo_rows & output$time == period
+                        contributions <- output$contribution_pp[period_rows]
+                        missing_components <- output$component_code[period_rows][is.na(contributions)]
+                        complete <- length(missing_components) == 0
+                        partial_sum <- sum(contributions, na.rm = TRUE)
+                        contribution_sum <- if (complete) partial_sum else NA_real_
+                        total_change <- output$total_change_pct[period_rows][1]
+                        residual <- if (complete && !is.na(total_change)) {
+                                total_change - contribution_sum
+                        } else {
+                                NA_real_
+                        }
+
+                        output$partial_contribution_sum_pp[period_rows] <- partial_sum
+                        output$contribution_sum_pp[period_rows] <- contribution_sum
+                        output$residual_pp[period_rows] <- residual
+                        output$missing_components[period_rows] <- paste(missing_components, collapse = ", ")
+                        output$complete[period_rows] <- complete
+                        output$significant_residual[period_rows] <- !is.na(residual) &
+                                abs(residual) > residual_tolerance
+                }
+        }
+
+        output
+}
+
+allocate_fixed_base_levels <- function(contribution_data, level_shares) {
+        required_share_columns <- c("geo", "component_code", "level_share", "base_level_allocation")
+        if (!all(required_share_columns %in% names(level_shares))) {
+                stop("Level shares do not contain the required fields.")
+        }
+
+        output <- contribution_data
+        contribution_key <- paste(output$geo, output$component_code, sep = "\r")
+        share_key <- paste(level_shares$geo, level_shares$component_code, sep = "\r")
+        share_rows <- match(contribution_key, share_key)
+        output$level_share <- level_shares$level_share[share_rows]
+        output$base_level_allocation <- level_shares$base_level_allocation[share_rows]
+        output$allocated_index_level <- output$base_level_allocation + output$contribution_pp
+        output$allocated_index_level_plot <- NA_real_
+        output$allocated_level_sum <- NA_real_
+        output$level_allocation_complete <- FALSE
+
+        period_key <- paste(output$geo, output$time, sep = "\r")
+        for (key in unique(period_key)) {
+                rows <- period_key == key
+                complete <- all(output$complete[rows]) &&
+                        all(is.finite(output$allocated_index_level[rows]))
+                output$level_allocation_complete[rows] <- complete
+                if (complete) {
+                        output$allocated_index_level_plot[rows] <- output$allocated_index_level[rows]
+                        output$allocated_level_sum[rows] <- sum(output$allocated_index_level[rows])
+                }
+        }
+
+        output$reconstructed_index <- ifelse(
+                output$complete,
+                100 + output$contribution_sum_pp,
+                NA_real_
+        )
+        output$negative_allocated_level <- !is.na(output$allocated_index_level) &
+                output$allocated_index_level < 0
+        output
+}
+
+fixed_base_stacking_status <- function(data, tolerance = sqrt(.Machine$double.eps)) {
+        negative_rows <- !is.na(data$allocated_index_level_plot) &
+                data$allocated_index_level_plot < -tolerance
+        list(
+                supported = !any(negative_rows),
+                negative_rows = negative_rows,
+                message = if (any(negative_rows)) {
+                        paste(
+                                "One or more allocated component levels are negative.",
+                                "Plotly would separate positive and negative bars, so the chart uses",
+                                "non-stacked component lines instead of claiming a visual stacked total."
+                        )
+                } else {
+                        NULL
+                }
+        )
+}
+
+calculate_reference_period_contributions <- function(
+        index_data,
+        weight_data,
+        parent_code,
+        component_codes,
+        reference_type = c("month", "year"),
+        reference_period,
+        residual_tolerance = 0.05
+) {
+        reference_type <- match.arg(reference_type)
+
+        if (reference_type == "month") {
+                reference_month <- fixed_base_month(reference_period)
+                contribution_data <- calculate_fixed_base_contributions(
+                        index_data,
+                        weight_data,
+                        parent_code,
+                        component_codes,
+                        base_period = reference_month,
+                        residual_tolerance = residual_tolerance
+                )
+                contribution_data$anchor_period <- contribution_data$base_period
+                contribution_data$anchor_contribution_pp <- contribution_data$contribution_pp
+                contribution_data$anchor_parent_rebased <- contribution_data$parent_rebased
+                contribution_data$reference_type <- "month"
+                contribution_data$reference_period <- reference_month
+                contribution_data$history_start_period <- reference_month
+                contribution_data$history_limited <- FALSE
+                contribution_data$history_limit_reason <- ""
+                level_shares <- fixed_base_level_shares(
+                        index_data,
+                        weight_data,
+                        parent_code,
+                        component_codes,
+                        reference_type = "month",
+                        reference_period = reference_month
+                )
+        } else {
+                reference_year <- if (inherits(reference_period, "Date")) {
+                        as.integer(format(reference_period, "%Y"))
+                } else {
+                        as.integer(reference_period)
+                }
+                anchor <- select_fixed_base_year_anchor(
+                        index_data,
+                        weight_data,
+                        parent_code,
+                        component_codes,
+                        reference_year = reference_year
+                )
+                if (!isTRUE(anchor$valid)) {
+                        stop(anchor$history_limit_reason)
+                }
+                anchor_period <- anchor$anchor_period
+                anchored_data <- calculate_fixed_base_contributions(
+                        index_data,
+                        weight_data,
+                        parent_code,
+                        component_codes,
+                        base_period = anchor_period,
+                        residual_tolerance = residual_tolerance
+                )
+                contribution_data <- transform_fixed_base_to_full_year(
+                        anchored_data,
+                        reference_year,
+                        residual_tolerance = residual_tolerance
+                )
+                contribution_data$history_start_period <- anchor_period
+                contribution_data$history_limited <- anchor$history_limited
+                contribution_data$history_limit_reason <- anchor$history_limit_reason
+                level_shares <- fixed_base_level_shares(
+                        index_data,
+                        weight_data,
+                        parent_code,
+                        component_codes,
+                        reference_type = "year",
+                        reference_period = reference_year
+                )
+        }
+
+        allocate_fixed_base_levels(contribution_data, level_shares)
 }
