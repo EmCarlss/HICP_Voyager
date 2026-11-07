@@ -66,7 +66,7 @@ test_that("full-year transformation has the required annual means", {
 
         expect_equal(mean(parent_reference$parent_rebased), 100, tolerance = 1e-10)
         expect_equal(
-                unname(tapply(reference$contribution_pp, reference$component_code, mean)),
+                as.numeric(tapply(reference$contribution_pp, reference$component_code, mean)),
                 c(0, 0),
                 tolerance = 1e-10
         )
