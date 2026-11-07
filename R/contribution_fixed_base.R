@@ -510,74 +510,6 @@ valid_fixed_base_years <- function(index_data, weight_data, parent_code, compone
         }, logical(1))]
 }
 
-fixed_base_level_shares <- function(
-        index_data,
-        weight_data,
-        parent_code,
-        component_codes,
-        reference_type = c("month", "year"),
-        reference_period
-) {
-        reference_type <- match.arg(reference_type)
-        index_data <- index_data[, c("geo", "coicop18", "time", "values")]
-        weight_data <- weight_data[, c("geo", "coicop18", "time", "values")]
-        index_data$.period <- fixed_base_month(index_data$time)
-        weight_data$.year <- as.integer(format(as.Date(weight_data$time), "%Y"))
-
-        periods <- if (reference_type == "month") {
-                fixed_base_month(reference_period)
-        } else {
-                reference_year <- if (inherits(reference_period, "Date")) {
-                        as.integer(format(reference_period, "%Y"))
-                } else {
-                        as.integer(reference_period)
-                }
-                as.Date(sprintf("%d-%02d-01", reference_year, 1:12))
-        }
-
-        geographies <- sort(unique(as.character(index_data$geo)))
-        output <- vector("list", length(geographies))
-
-        for (geo_index in seq_along(geographies)) {
-                geo <- geographies[geo_index]
-                monthly_weights <- matrix(
-                        unlist(lapply(periods, function(period) {
-                                vapply(component_codes, function(component_code) {
-                                        fixed_base_price_updated_weight(
-                                                index_data,
-                                                weight_data,
-                                                geo,
-                                                parent_code,
-                                                component_code,
-                                                period
-                                        )
-                                }, numeric(1))
-                        })),
-                        nrow = length(component_codes),
-                        ncol = length(periods)
-                )
-
-                complete <- all(is.finite(monthly_weights))
-                average_weights <- if (complete) rowMeans(monthly_weights) else rep(NA_real_, length(component_codes))
-                weight_total <- sum(average_weights)
-                shares <- if (!complete || !is.finite(weight_total) || weight_total <= 0) {
-                        rep(NA_real_, length(component_codes))
-                } else {
-                        average_weights / weight_total
-                }
-
-                output[[geo_index]] <- data.frame(
-                        geo = geo,
-                        component_code = component_codes,
-                        level_share = shares,
-                        base_level_allocation = 100 * shares,
-                        stringsAsFactors = FALSE
-                )
-        }
-
-        do.call(rbind, output)
-}
-
 transform_fixed_base_to_full_year <- function(
         contribution_data,
         reference_year,
@@ -666,63 +598,6 @@ transform_fixed_base_to_full_year <- function(
         output
 }
 
-allocate_fixed_base_levels <- function(contribution_data, level_shares) {
-        required_share_columns <- c("geo", "component_code", "level_share", "base_level_allocation")
-        if (!all(required_share_columns %in% names(level_shares))) {
-                stop("Level shares do not contain the required fields.")
-        }
-
-        output <- contribution_data
-        contribution_key <- paste(output$geo, output$component_code, sep = "\r")
-        share_key <- paste(level_shares$geo, level_shares$component_code, sep = "\r")
-        share_rows <- match(contribution_key, share_key)
-        output$level_share <- level_shares$level_share[share_rows]
-        output$base_level_allocation <- level_shares$base_level_allocation[share_rows]
-        output$allocated_index_level <- output$base_level_allocation + output$contribution_pp
-        output$allocated_index_level_plot <- NA_real_
-        output$allocated_level_sum <- NA_real_
-        output$level_allocation_complete <- FALSE
-
-        period_key <- paste(output$geo, output$time, sep = "\r")
-        for (key in unique(period_key)) {
-                rows <- period_key == key
-                complete <- all(output$complete[rows]) &&
-                        all(is.finite(output$allocated_index_level[rows]))
-                output$level_allocation_complete[rows] <- complete
-                if (complete) {
-                        output$allocated_index_level_plot[rows] <- output$allocated_index_level[rows]
-                        output$allocated_level_sum[rows] <- sum(output$allocated_index_level[rows])
-                }
-        }
-
-        output$reconstructed_index <- ifelse(
-                output$complete,
-                100 + output$contribution_sum_pp,
-                NA_real_
-        )
-        output$negative_allocated_level <- !is.na(output$allocated_index_level) &
-                output$allocated_index_level < 0
-        output
-}
-
-fixed_base_stacking_status <- function(data, tolerance = sqrt(.Machine$double.eps)) {
-        negative_rows <- !is.na(data$allocated_index_level_plot) &
-                data$allocated_index_level_plot < -tolerance
-        list(
-                supported = !any(negative_rows),
-                negative_rows = negative_rows,
-                message = if (any(negative_rows)) {
-                        paste(
-                                "One or more allocated component levels are negative.",
-                                "Plotly would separate positive and negative bars, so the chart uses",
-                                "non-stacked component lines instead of claiming a visual stacked total."
-                        )
-                } else {
-                        NULL
-                }
-        )
-}
-
 calculate_reference_period_contributions <- function(
         index_data,
         weight_data,
@@ -752,14 +627,6 @@ calculate_reference_period_contributions <- function(
                 contribution_data$history_start_period <- reference_month
                 contribution_data$history_limited <- FALSE
                 contribution_data$history_limit_reason <- ""
-                level_shares <- fixed_base_level_shares(
-                        index_data,
-                        weight_data,
-                        parent_code,
-                        component_codes,
-                        reference_type = "month",
-                        reference_period = reference_month
-                )
         } else {
                 reference_year <- if (inherits(reference_period, "Date")) {
                         as.integer(format(reference_period, "%Y"))
@@ -793,15 +660,7 @@ calculate_reference_period_contributions <- function(
                 contribution_data$history_start_period <- anchor_period
                 contribution_data$history_limited <- anchor$history_limited
                 contribution_data$history_limit_reason <- anchor$history_limit_reason
-                level_shares <- fixed_base_level_shares(
-                        index_data,
-                        weight_data,
-                        parent_code,
-                        component_codes,
-                        reference_type = "year",
-                        reference_period = reference_year
-                )
         }
 
-        allocate_fixed_base_levels(contribution_data, level_shares)
+        contribution_data
 }
