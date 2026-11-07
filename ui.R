@@ -414,10 +414,21 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                         "Index",
                         tags$div(
                                 class = "app-tab-page",
-                                tab_hero(
-                                        "Index",
-                                        "Compare HICP and HICP-CT index developments across countries and product categories. Rebase series to a common reference period, adjust lower-level indices for all-items inflation or compare selected country indices with the corresponding EU27 index.",
-                                        badges = c("HICP", "HICP-CT", "Rebasing", "Relative price index", "EU27 comparison")
+                                conditionalPanel(
+                                        condition = "!input.index_view_mode || input.index_view_mode == 'compare'",
+                                        tab_hero(
+                                                "Index",
+                                                "Compare HICP and HICP-CT index developments across countries and product categories. Rebase series to a common reference period, adjust lower-level indices for all-items inflation or compare selected country indices with the corresponding EU27 index.",
+                                                badges = c("HICP", "HICP-CT", "Rebasing", "Relative price index", "EU27 comparison")
+                                        )
+                                ),
+                                conditionalPanel(
+                                        condition = "input.index_view_mode == 'fixed_base'",
+                                        tab_hero(
+                                                "Index contributions",
+                                                "Decompose the price change of a selected HICP aggregate from a fixed reference month to every subsequent month into contributions from its direct ECOICOP children.",
+                                                badges = c("HICP", "ECOICOP", "Fixed reference period", "Contributions")
+                                        )
                                 ),
                                 fluidRow(
                                         column(
@@ -425,6 +436,20 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                 tags$div(
                                                         class = "control-card",
                                                         tags$h3("Index settings"),
+                                                        control_group(
+                                                                "Display mode",
+                                                                radioButtons(
+                                                                        "index_view_mode",
+                                                                        NULL,
+                                                                        choices = c(
+                                                                                "Compare indices" = "compare",
+                                                                                "Contributions since reference period" = "fixed_base"
+                                                                        ),
+                                                                        selected = "compare"
+                                                                )
+                                                        ),
+                                                        conditionalPanel(
+                                                                condition = "input.index_view_mode == 'compare'",
                                                         control_group(
                                                                 "Countries",
                                                                 country_group_buttons("index"),
@@ -507,9 +532,65 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                                 note = "The selected reference period is set to 100 for all displayed series."
                                                         ),
                                                         download_panel("output.plot", "downloadData")
+                                                        ),
+                                                        conditionalPanel(
+                                                                condition = "input.index_view_mode == 'fixed_base'",
+                                                                control_group(
+                                                                        "Country",
+                                                                        selectInput(
+                                                                                "fixed_base_country",
+                                                                                "Select one country",
+                                                                                choices = setNames(eurostat_countries$code, eurostat_countries$name),
+                                                                                multiple = FALSE
+                                                                        )
+                                                                ),
+                                                                control_group(
+                                                                        "Parent aggregate",
+                                                                        selectInput(
+                                                                                "fixed_base_parent",
+                                                                                "Select an ECOICOP aggregate",
+                                                                                choices = setNames(
+                                                                                        fixed_base_parent_set$coicop18_code,
+                                                                                        fixed_base_parent_set$code_label
+                                                                                ),
+                                                                                selected = "CP011",
+                                                                                multiple = FALSE
+                                                                        ),
+                                                                        note = "Contributions use the complete set of direct ECOICOP children."
+                                                                ),
+                                                                actionButton(
+                                                                        "fixed_base_retrieve",
+                                                                        "Retrieve data",
+                                                                        class = "primary-action-btn"
+                                                                ),
+                                                                control_group(
+                                                                        "Reference period",
+                                                                        selectInput(
+                                                                                "fixed_base_period",
+                                                                                "Select monthly reference period",
+                                                                                choices = ""
+                                                                        ),
+                                                                        note = paste(
+                                                                                "Monthly reference periods use the exact arbitrary-period method.",
+                                                                                "Full-year bases remain available in Compare indices only."
+                                                                        )
+                                                                ),
+                                                                download_panel("output.plot_fixed_base", "downloadData_fixed_base")
+                                                        )
                                                 )
                                         ),
-                                        column(width = 9, tags$div(class = "plot-card", plotlyOutput("plot", height = "620px")))
+                                        column(
+                                                width = 9,
+                                                conditionalPanel(
+                                                        condition = "input.index_view_mode == 'compare'",
+                                                        tags$div(class = "plot-card", plotlyOutput("plot", height = "620px"))
+                                                ),
+                                                conditionalPanel(
+                                                        condition = "input.index_view_mode == 'fixed_base'",
+                                                        uiOutput("fixed_base_warning"),
+                                                        tags$div(class = "plot-card", plotlyOutput("plot_fixed_base", height = "820px"))
+                                                )
+                                        )
                                 )
                         )
                 ),
@@ -902,12 +983,21 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                 class = "help-card",
                                                 tags$h3("Index"),
                                                 tags$p(
-                                                        "The Index tab is used to compare price index developments across countries and product categories. ",
-                                                        "You can select one or more countries, one or more COICOP aggregates, and either HICP, HICP-CT, or both."
+                                                        "The Index tab has two display modes. Compare indices is used to compare price index developments across countries and product categories. ",
+                                                        "Contributions since reference period decomposes the price change of one selected HICP parent aggregate from a fixed reference month."
                                                 ),
                                                 tags$table(
                                                         class = "help-table",
                                                         tags$tr(tags$th("Function"), tags$th("Description")),
+                                                        tags$tr(
+                                                                tags$td(tags$strong("Display mode")),
+                                                                tags$td(
+                                                                        tags$strong("Compare indices"),
+                                                                        " supports country and product comparisons, HICP/HICP-CT and the existing rebasing and adjustment options. ",
+                                                                        tags$strong("Contributions since reference period"),
+                                                                        " supports ordinary HICP for one country, one parent ECOICOP aggregate and a monthly reference period."
+                                                                )
+                                                        ),
                                                         tags$tr(
                                                                 tags$td(tags$strong("Country group quick selection")),
                                                                 tags$td("Select predefined groups such as EU, Euro area, Nordic, Baltic, Balkan or Benelux.")
@@ -946,7 +1036,20 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                         tags$tr(
                                                                 tags$td(tags$strong("Index reference period")),
                                                                 tags$td("Rebases the selected series to either a full year average or to a specific month.")
+                                                        ),
+                                                        tags$tr(
+                                                                tags$td(tags$strong("Contributions from a fixed reference month")),
+                                                                tags$td(
+                                                                        "Decomposes the selected parent aggregate's percentage change into its complete set of direct ECOICOP children. ",
+                                                                        "The component sum should match the published parent change. The upper panel shows the published and reconstructed parent indices together, while the lower panel shows component contributions and the total change."
+                                                                )
                                                         )
+                                                ),
+                                                tags$div(
+                                                        class = "help-callout",
+                                                        tags$strong("Contribution diagnostics: "),
+                                                        "The reconstructed index equals 100 plus the complete component contribution sum. Residuals and missing observations are reported openly; incomplete component sums are not used to bridge gaps in the reconstructed series. ",
+                                                        "Fixed-base contributions currently support monthly reference periods only."
                                                 ),
                                                 tags$div(
                                                         class = "help-callout",
@@ -1118,6 +1221,47 @@ body { background: linear-gradient(180deg, #f8fbfa 0%, #fbfdfc 42%, #ffffff 100%
                                                 ),
                                                 tags$p(
                                                         "When CP00 is selected with contribution target set to selected higher aggregate, the contributions from APF, APM and TOT_X_AP are calculated analogously to the other special-aggregate hierarchies."
+                                                ),
+
+                                                tags$hr(),
+
+                                                tags$h3("Contributions since a fixed reference period"),
+                                                tags$p(
+                                                        "This method decomposes the selected HICP parent aggregate's percentage price change from a fixed base month to each subsequent month. ",
+                                                        "The components are the complete set of direct child aggregates in the ECOICOP hierarchy, and each contribution is expressed in percentage points of the parent aggregate's change."
+                                                ),
+                                                tags$p(
+                                                        "The calculation follows the additive decomposition for arbitrary time periods developed by Schwind and Weinand. ",
+                                                        "It uses annual component weights normalised against the selected parent, price-updates the base-period weights, and follows the HICP chain links at calendar-year boundaries."
+                                                ),
+                                                tags$p(
+                                                        "For a target month in a later year, equations (5)-(7) split each component's contribution into a base-year term, zero or more intervening full-year terms, and a current-year term. ",
+                                                        "This is a separate calculation from the Ribe contributions shown on the M/M-1 and M/M-12 tabs; it is not obtained by simply summing Voyager's existing monthly contributions."
+                                                ),
+                                                tags$p("When the direct-child partition and underlying data are complete, the additive relationship is:"),
+                                                tags$div(
+                                                        "$$",
+                                                        "100 \\times \\left(\\frac{P_t}{P_b} - 1\\right) = \\sum_i C_{i,b \\rightarrow t}",
+                                                        "$$"
+                                                ),
+                                                tags$p(
+                                                        "Published index levels and weights may be rounded, and some component observations may be unavailable. ",
+                                                        "The app therefore reports the residual between the published parent change and the complete contribution sum. Residuals are not allocated artificially to components, and incomplete sums are marked as missing."
+                                                ),
+                                                tags$p(
+                                                        "The current implementation supports monthly base periods only."
+                                                ),
+                                                tags$p(
+                                                        class = "help-muted",
+                                                        tags$strong("Reference: "),
+                                                        "Schwind, Patrick & Weinand, Sebastian (2026). ",
+                                                        tags$a(
+                                                                tags$em("Contributions to euro area inflation over arbitrary time periods"),
+                                                                href = "https://stats.unece.org/ottawagroup/download/Meeting_19_session6_paper_Schwind_Weinand_2026_Contributions_to_euro_area_inflation_over_arbitrary_time_periods.pdf",
+                                                                target = "_blank",
+                                                                rel = "noopener noreferrer"
+                                                        ),
+                                                        ". 19th Meeting of the Ottawa Group on Price Indices. See equations (5)-(7)."
                                                 ),
 
                                                 tags$hr(),
